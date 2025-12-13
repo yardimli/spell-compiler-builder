@@ -15,6 +15,10 @@ let ghostMesh = null;
 let selectedAssetFile = null;
 let currentGridSize = 5;
 
+// Interaction State
+let draggedMesh = null;
+let isDragging = false;
+
 // --- INITIALIZATION ---
 const canvas = document.getElementById("renderCanvas");
 
@@ -60,6 +64,7 @@ async function init() {
 	
 	// 4. Interaction Setup
 	setupDragAndDrop();
+	setupPointerInteraction();
 	setupUIControls();
 	
 	// 5. Render Loop
@@ -130,7 +135,7 @@ function createGrid(gridSize) {
 	groundMesh.material.diffuseTexture.vScale = tiles;
 }
 
-// --- DRAG AND DROP ---
+// --- DRAG AND DROP (NEW ASSETS) ---
 function setupDragAndDrop() {
 	const canvasZone = document.getElementById("renderCanvas");
 	
@@ -144,7 +149,7 @@ function setupDragAndDrop() {
 			}
 			if (ghostMesh) {
 				let targetPos = pickResult.pickedPoint.clone();
-				const snapPos = getSnapPosition(targetPos);
+				const snapPos = getSnapPosition(targetPos, ghostMesh);
 				snapPos.y = ghostMesh.position.y;
 				ghostMesh.position = snapPos;
 			}
@@ -163,14 +168,24 @@ function setupDragAndDrop() {
 			};
 			placedObjects.push(metadata);
 			ghostMesh.name = "obj_" + metadata.id;
+			
+			// Enable picking for the placed object so it can be moved later
 			ghostMesh.isPickable = true;
+			ghostMesh.getChildMeshes().forEach(m => m.isPickable = true);
+			
 			ghostMesh = null;
 			selectedAssetFile = null;
 		}
 	});
 	
 	// Cleanup if dragged out
-	canvasZone.addEventListener("dragleave", () => {
+	canvasZone.addEventListener("dragleave", (e) => {
+		// Check if we really left the canvas area to prevent flickering
+		const rect = canvasZone.getBoundingClientRect();
+		if (e.clientX > rect.left && e.clientX < rect.right && e.clientY > rect.top && e.clientY < rect.bottom) {
+			return;
+		}
+		
 		if(ghostMesh) {
 			ghostMesh.dispose();
 			ghostMesh = null;
@@ -184,13 +199,19 @@ function loadGhostMesh(filename, position) {
 	ghostMesh = dummy;
 	
 	BABYLON.SceneLoader.ImportMeshAsync("", ASSET_FOLDER, filename, scene).then((result) => {
+		// If ghostMesh is not our dummy (e.g. user left canvas and ghostMesh was nulled), abort
+		if (ghostMesh !== dummy) {
+			result.meshes[0].dispose();
+			return;
+		}
+		
 		dummy.dispose();
 		const root = result.meshes[0];
 		ghostMesh = root;
 		
 		const hierarchy = root.getChildMeshes(false);
 		hierarchy.forEach(m => {
-			m.isPickable = false;
+			m.isPickable = false; // Ghost should not block raycasts
 			shadowGenerator.addShadowCaster(m, true);
 		});
 		
@@ -200,16 +221,82 @@ function loadGhostMesh(filename, position) {
 		root.position.y += heightOffset;
 	}).catch(err => {
 		console.error("Error loading asset:", err);
-		ghostMesh = null;
+		if (ghostMesh === dummy) {
+			ghostMesh.dispose();
+			ghostMesh = null;
+		}
 	});
 }
 
-function getSnapPosition(currentPos) {
+// --- POINTER INTERACTION (MOVE EXISTING) ---
+function setupPointerInteraction() {
+	scene.onPointerObservable.add((pointerInfo) => {
+		switch (pointerInfo.type) {
+			case BABYLON.PointerEventTypes.POINTERDOWN:
+				if (pointerInfo.pickInfo.hit && pointerInfo.pickInfo.pickedMesh !== groundMesh) {
+					// Find the root object (either obj_... or pointLight_...)
+					let mesh = pointerInfo.pickInfo.pickedMesh;
+					while (mesh && !mesh.name.startsWith("obj_") && !mesh.name.startsWith("pointLight_") && mesh.parent) {
+						mesh = mesh.parent;
+					}
+					
+					if (mesh && (mesh.name.startsWith("obj_") || mesh.name.startsWith("pointLight_"))) {
+						draggedMesh = mesh;
+						isDragging = true;
+						camera.detachControl();
+					}
+				}
+				break;
+			
+			case BABYLON.PointerEventTypes.POINTERUP:
+				if (isDragging) {
+					if (draggedMesh) {
+						updatePlacedObject(draggedMesh);
+					}
+					isDragging = false;
+					draggedMesh = null;
+					camera.attachControl(canvas, true);
+				}
+				break;
+			
+			case BABYLON.PointerEventTypes.POINTERMOVE:
+				if (isDragging && draggedMesh) {
+					const pickResult = scene.pick(scene.pointerX, scene.pointerY, (m) => m === groundMesh);
+					if (pickResult.hit) {
+						let targetPos = pickResult.pickedPoint.clone();
+						const snapPos = getSnapPosition(targetPos, draggedMesh);
+						
+						// Maintain the object's original height (e.g. lights might be higher)
+						snapPos.y = draggedMesh.position.y;
+						draggedMesh.position = snapPos;
+					}
+				}
+				break;
+		}
+	});
+}
+
+function updatePlacedObject(mesh) {
+	let id = null;
+	if (mesh.name.startsWith("obj_")) {
+		id = mesh.name.substring(4);
+	} else if (mesh.name.startsWith("pointLight_")) {
+		id = mesh.name;
+	}
+	
+	const obj = placedObjects.find(o => o.id === id || (o.type === "light" && o.id === id));
+	if (obj) {
+		obj.position = mesh.position.asArray();
+	}
+}
+
+function getSnapPosition(currentPos, ignoreMesh = null) {
 	let closestDist = Number.MAX_VALUE;
 	let snapPos = currentPos.clone();
 	
 	scene.meshes.forEach(mesh => {
-		if (mesh.name.startsWith("obj_")) {
+		// Ignore the object being dragged, the ground, and non-game objects
+		if (mesh !== ignoreMesh && mesh.name.startsWith("obj_")) {
 			const dist = BABYLON.Vector3.Distance(currentPos, mesh.position);
 			if (dist < SNAP_THRESHOLD && dist < closestDist) {
 				snapPos.x = mesh.position.x;
@@ -282,11 +369,24 @@ function loadMap(jsonString) {
 		currentMapName = data.name || "loaded_map";
 		document.getElementById("mapName").value = currentMapName;
 		const toDispose = scene.meshes.filter(m => m.name.startsWith("obj_") || m.name.startsWith("pointLight_"));
+		// Also dispose lights
+		const lightsToDispose = scene.lights.filter(l => l.name.startsWith("pointLight_"));
 		toDispose.forEach(m => m.dispose());
+		lightsToDispose.forEach(l => l.dispose());
+		
 		placedObjects = [];
 		if (data.assets) {
 			data.assets.forEach(item => {
-				if (item.type === "light") { /* Light Logic */ }
+				if (item.type === "light") {
+					const light = new BABYLON.PointLight(item.id, BABYLON.Vector3.FromArray(item.position), scene);
+					light.intensity = 0.5;
+					const sphere = BABYLON.MeshBuilder.CreateSphere("lightGizmo", {diameter: 0.5}, scene);
+					sphere.position = light.position;
+					sphere.material = new BABYLON.StandardMaterial("lm", scene);
+					sphere.material.emissiveColor = new BABYLON.Color3(1,1,0);
+					sphere.setParent(light);
+					placedObjects.push(item);
+				}
 				else {
 					BABYLON.SceneLoader.ImportMeshAsync("", ASSET_FOLDER, item.file, scene).then(res => {
 						const root = res.meshes[0];
@@ -294,7 +394,11 @@ function loadMap(jsonString) {
 						root.position = BABYLON.Vector3.FromArray(item.position);
 						if(item.rotation) root.rotation = BABYLON.Vector3.FromArray(item.rotation);
 						if(item.scaling) root.scaling = BABYLON.Vector3.FromArray(item.scaling);
-						res.meshes.forEach(m => { shadowGenerator.addShadowCaster(m, true); m.receiveShadows = true; });
+						res.meshes.forEach(m => {
+							shadowGenerator.addShadowCaster(m, true);
+							m.receiveShadows = true;
+							m.isPickable = true; // Ensure pickable for drag interaction
+						});
 						placedObjects.push(item);
 					});
 				}

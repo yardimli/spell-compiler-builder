@@ -9,7 +9,7 @@ export async function loadAssets(engine) {
 	const assetContext = require.context('../assets/nature', false, /\.glb$/);
 	const glbFiles = assetContext.keys().map(key => key.replace('./', ''));
 	
-	// 2. Scan existing PNG cache
+	// 2. Scan existing PNG cache (Webpack Build-time knowledge)
 	const cacheContext = require.context('../assets/cache', false, /\.png$/);
 	const cachedThumbnails = {};
 	cacheContext.keys().forEach(key => {
@@ -19,9 +19,9 @@ export async function loadAssets(engine) {
 	});
 	
 	const finalAssets = [];
-	const missingThumbnails = [];
+	const potentiallyMissing = [];
 	
-	// 3. Sort
+	// 3. Sort based on Build-time cache
 	glbFiles.forEach(file => {
 		if (cachedThumbnails[file]) {
 			finalAssets.push({
@@ -30,20 +30,51 @@ export async function loadAssets(engine) {
 				generated: false
 			});
 		} else {
-			missingThumbnails.push(file);
+			potentiallyMissing.push(file);
 		}
 	});
 	
+	// 4. Check Runtime Cache (Server-side check for files added after build)
+	// This prevents regenerating thumbnails that exist on disk but not in webpack bundle
+	const actuallyMissing = [];
 	
-	// 4. Generate Missing
-	if (missingThumbnails.length > 0) {
-		console.log(`[Loader] Generating ${missingThumbnails.length} missing thumbnails...`);
-		const generated = await generateThumbnails(engine, missingThumbnails);
+	await Promise.all(potentiallyMissing.map(async (file) => {
+		const pngName = file.replace('.glb', '.png');
+		// Construct path relative to the served HTML
+		// Add timestamp to bypass browser cache of previous 404s
+		const url = `assets/cache/${pngName}`;
+		const checkUrl = `${url}?t=${Date.now()}`;
+		
+		try {
+			// Check if file exists on server
+			const response = await fetch(checkUrl, { method: 'HEAD' });
+			if (response.ok) {
+				finalAssets.push({
+					file: file,
+					src: url, // Use clean URL for the src
+					generated: false
+				});
+			} else {
+				actuallyMissing.push(file);
+			}
+		} catch (e) {
+			actuallyMissing.push(file);
+		}
+	}));
+	
+	// 5. Generate Missing
+	if (actuallyMissing.length > 0) {
+		console.log(`[Loader] Generating ${actuallyMissing.length} missing thumbnails...`);
+		const generated = await generateThumbnails(engine, actuallyMissing);
 		finalAssets.push(...generated);
 	}
 	
+	// Sort by filename to keep UI consistent
+	finalAssets.sort((a, b) => a.file.localeCompare(b.file));
+	
 	return finalAssets;
 }
+
 
 async function generateThumbnails(engine, files) {
 	const results = [];
@@ -65,7 +96,6 @@ async function generateThumbnails(engine, files) {
 	engine.runRenderLoop(() => {
 		thumbScene.render();
 	});
-	
 	
 	for (const file of files) {
 		console.log(`[Loader] Processing: ${file}...`);
@@ -110,6 +140,12 @@ async function generateThumbnails(engine, files) {
 function processSingleFile(scene, camera, engine, file) {
 	// Return a Promise so we can await the screenshot callback
 	return new Promise(async (resolve, reject) => {
+		// Clear the scene meshes before loading a new object
+		// This ensures no artifacts from previous loads remain
+		while (scene.meshes.length > 0) {
+			scene.meshes[0].dispose(false, true);
+		}
+		
 		let root = null;
 		try {
 			const result = await BABYLON.SceneLoader.ImportMeshAsync("", ASSET_FOLDER, file, scene);
@@ -163,6 +199,7 @@ function processSingleFile(scene, camera, engine, file) {
 			);
 			
 			console.log(`[Thumbnail] Screenshot captured for ${file}`);
+			
 			resolve(screenshotDataUrl);
 			
 		} catch (e) {
