@@ -1,30 +1,23 @@
 #TODO
 
-#TODO 4
-- bug: undo doesnt work properly after deleting an object or moving an object
-
-- on the sidebar all categories should be collapsed by default (save the state in local storage and load state on startup)
-
-- create a global settings modal in the UI
-- in global settings ui add:
-- allow y offset of new objects added to the canvas so they dont intersect with the grid
-- allow user to change the color of the grid
-- allow user to change the size multiplier of the grid cells
-- allow user to change the background color of the canvas
-- start with snapping to grid disabled and snapping to objects enabled make it part of the global settings modal
-- save global settings in local storage so they persist between sessions
-
-
 
 #TODO 5
 
-- enable multi-selection of objects
-- force shift key to be pressed to use mouse for multi-selection, when shift is pressed pan and zoom should be disabled
+- make pan and zoom with mouse only work when ctrl key is pressed
+- enable multi-selection of objects, shift key to be pressed to use mouse for multi-selection
 - allow moving multiple selected objects at the same time
 - allow deleting multiple selected objects at the same time
+- when multiple objects are selected highlight all of the selected objects
+- when multiple objects are selected in property panel show a list of all selected objects
+- allow duplicating multiple selected objects at the same time (duplicate button in the property panel when multiple objects are selected)
+
+#TODO 6
+
 - when adding new objects if an object is already selected add the new object on top of the selected object
 - allow user to lock existing objects so they cant be moved or deleted (in property panel add a lock toggle)
 - save current map to local storage so it persists between sessions
+- add lighting buttons to the UI to toggle different light setups (daylight, night, indoor)
+- allow loading skybox textures from local files for the canvas background (implement in global settings modal)
 
 
 #DONE
@@ -53,3 +46,5 @@
 - in the asset-item for label remove the .glb extension and the first categoryname from the label.
 - when giving the objects name use the full filename except the extension but add a _1 _2 etc. to make the names unique
 in the grid make the current size 50% smaller for how each grid size is rendered
+
+- bug: undo doesnt work properly after deleting an object or moving an object

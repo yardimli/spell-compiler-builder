@@ -12,10 +12,11 @@ export class ObjectManager {
 		this.placedObjects = []; // Array of metadata objects
 		this.selectedMesh = null;
 		
-		// Settings
-		this.snapToGrid = true;
-		this.snapToObjects = false;
+		// Settings (Defaults as requested: Grid Snap OFF, Object Snap ON)
+		this.snapToGrid = false;
+		this.snapToObjects = true;
 		this.gridSize = 2.5;
+		this.defaultYOffset = 0; // New setting for Y offset
 		
 		// Initialize Undo/Redo Manager
 		this.undoRedo = new UndoRedoManager(this);
@@ -53,7 +54,8 @@ export class ObjectManager {
 			const heightOffset = -bounds.min.y;
 			
 			root.name = uniqueName;
-			root.position = new BABYLON.Vector3(position.x, position.y + heightOffset, position.z);
+			// Apply default Y offset from settings here
+			root.position = new BABYLON.Vector3(position.x, position.y + heightOffset + this.defaultYOffset, position.z);
 			root.metadata = { id: id, isObject: true, file: filename };
 			
 			result.meshes.forEach(m => {
@@ -89,7 +91,7 @@ export class ObjectManager {
 		const existingLights = this.placedObjects.filter(o => o.type === 'light');
 		const name = `Light_${existingLights.length + 1}`;
 		
-		const light = new BABYLON.PointLight(name, new BABYLON.Vector3(position.x, 5, position.z), this.scene);
+		const light = new BABYLON.PointLight(name, new BABYLON.Vector3(position.x, 5 + this.defaultYOffset, position.z), this.scene);
 		light.intensity = 0.5;
 		light.metadata = { id: id, isObject: true, type: 'light' };
 		

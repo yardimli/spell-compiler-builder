@@ -6,6 +6,20 @@ export class BuilderUI {
 		this.manager = builderScene.objectManager;
 		this.currentMapName = 'new_map';
 		
+		// LocalStorage Keys
+		this.LS_SETTINGS_KEY = 'builder_global_settings';
+		this.LS_SIDEBAR_KEY = 'builder_sidebar_state';
+		
+		// Default Global Settings
+		this.globalSettings = {
+			yOffset: 0,
+			gridSize: 2.5,
+			gridColor: '#555555',
+			bgColor: '#2c3e50',
+			snapGrid: false,
+			snapObj: true
+		};
+		
 		// Ensure manager exists before creating panel
 		if (this.manager) {
 			this.propertyPanel = new PropertyPanel(this.manager);
@@ -15,14 +29,58 @@ export class BuilderUI {
 	}
 	
 	setup (assets) {
+		this.loadSettings(); // Load from LocalStorage
+		this.applySettings(); // Apply to Scene/Manager
+		
 		this.buildSidebar(assets);
 		this.setupControls();
 		this.setupHistoryUI();
+		this.setupSettingsModal();
 	}
 	
+	// --- LocalStorage Logic ---
+	loadSettings () {
+		const saved = localStorage.getItem(this.LS_SETTINGS_KEY);
+		if (saved) {
+			try {
+				const parsed = JSON.parse(saved);
+				this.globalSettings = { ...this.globalSettings, ...parsed };
+			} catch (e) {
+				console.error('Failed to load settings', e);
+			}
+		}
+	}
+	
+	saveSettings () {
+		localStorage.setItem(this.LS_SETTINGS_KEY, JSON.stringify(this.globalSettings));
+	}
+	
+	applySettings () {
+		// Apply to ObjectManager
+		this.manager.defaultYOffset = parseFloat(this.globalSettings.yOffset);
+		this.manager.gridSize = parseFloat(this.globalSettings.gridSize);
+		this.manager.snapToGrid = this.globalSettings.snapGrid;
+		this.manager.snapToObjects = this.globalSettings.snapObj;
+		
+		// Apply to Scene
+		this.scene.setGridColors(this.globalSettings.gridColor, this.globalSettings.bgColor);
+		this.scene.updateGridSize(this.manager.gridSize);
+		
+		// Sync Quick Toggles in Sidebar
+		document.getElementById('chkSnapGrid').checked = this.globalSettings.snapGrid;
+		document.getElementById('chkSnapObj').checked = this.globalSettings.snapObj;
+	}
+	
+	// --- Sidebar Logic ---
 	buildSidebar (assets) {
 		const listContainer = document.getElementById('asset-list');
 		listContainer.innerHTML = '';
+		
+		// Load collapsed state
+		let sidebarState = {};
+		try {
+			sidebarState = JSON.parse(localStorage.getItem(this.LS_SIDEBAR_KEY)) || {};
+		} catch (e) {}
 		
 		// 1. Group assets by category (prefix before first underscore)
 		const categories = {};
@@ -49,10 +107,24 @@ export class BuilderUI {
 			const grid = document.createElement('div');
 			grid.className = 'category-grid';
 			
+			// Check state (Default to Collapsed if not found in LS, or if LS says so)
+			// Requirement: "all categories should be collapsed by default"
+			// If key exists in LS, use it. If not, default to true (collapsed).
+			const isCollapsed = sidebarState[categoryName] !== undefined ? sidebarState[categoryName] : true;
+			
+			if (isCollapsed) {
+				header.classList.add('collapsed');
+				grid.classList.add('hidden');
+			}
+			
 			// Toggle functionality
 			header.addEventListener('click', () => {
-				header.classList.toggle('collapsed');
+				const collapsed = header.classList.toggle('collapsed');
 				grid.classList.toggle('hidden');
+				
+				// Save state
+				sidebarState[categoryName] = collapsed;
+				localStorage.setItem(this.LS_SIDEBAR_KEY, JSON.stringify(sidebarState));
 			});
 			
 			// Add Assets to Grid
@@ -91,21 +163,20 @@ export class BuilderUI {
 	}
 	
 	setupControls () {
-		// Grid Size
-		const slider = document.getElementById('gridSizeInput');
-		const label = document.getElementById('gridSizeLabel');
-		slider.oninput = (e) => {
-			const size = parseFloat(e.target.value);
-			label.innerText = size + ' units';
-			this.scene.updateGridSize(size);
-		};
-		
-		// Snapping Toggles
+		// Snapping Toggles (Quick Access)
 		const chkSnapGrid = document.getElementById('chkSnapGrid');
 		const chkSnapObj = document.getElementById('chkSnapObj');
 		
-		chkSnapGrid.onchange = (e) => { this.manager.snapToGrid = e.target.checked; };
-		chkSnapObj.onchange = (e) => { this.manager.snapToObjects = e.target.checked; };
+		chkSnapGrid.onchange = (e) => {
+			this.manager.snapToGrid = e.target.checked;
+			this.globalSettings.snapGrid = e.target.checked;
+			this.saveSettings();
+		};
+		chkSnapObj.onchange = (e) => {
+			this.manager.snapToObjects = e.target.checked;
+			this.globalSettings.snapObj = e.target.checked;
+			this.saveSettings();
+		};
 		
 		// Map Name
 		const mapNameInput = document.getElementById('mapName');
@@ -154,6 +225,56 @@ export class BuilderUI {
 		// Add Light
 		document.getElementById('btnAddLight').onclick = () => {
 			this.manager.addLight(this.scene.selectedCellPosition);
+		};
+	}
+	
+	setupSettingsModal () {
+		const modal = document.getElementById('settingsModal');
+		const btnOpen = document.getElementById('btnSettings');
+		const btnCancel = document.getElementById('btnCancelSettings');
+		const btnSave = document.getElementById('btnSaveSettings');
+		
+		// Inputs
+		const inYOffset = document.getElementById('settingYOffset');
+		const inGridSize = document.getElementById('settingGridSize');
+		const inGridColor = document.getElementById('settingGridColor');
+		const inBgColor = document.getElementById('settingBgColor');
+		const inSnapGrid = document.getElementById('settingSnapGrid');
+		const inSnapObj = document.getElementById('settingSnapObj');
+		
+		btnOpen.onclick = () => {
+			// Populate fields with current settings
+			inYOffset.value = this.globalSettings.yOffset;
+			inGridSize.value = this.globalSettings.gridSize;
+			inGridColor.value = this.globalSettings.gridColor;
+			inBgColor.value = this.globalSettings.bgColor;
+			inSnapGrid.checked = this.globalSettings.snapGrid;
+			inSnapObj.checked = this.globalSettings.snapObj;
+			
+			modal.style.display = 'flex';
+		};
+		
+		const close = () => { modal.style.display = 'none'; };
+		
+		btnCancel.onclick = close;
+		
+		btnSave.onclick = () => {
+			// Update Settings Object
+			this.globalSettings.yOffset = parseFloat(inYOffset.value);
+			this.globalSettings.gridSize = parseFloat(inGridSize.value);
+			this.globalSettings.gridColor = inGridColor.value;
+			this.globalSettings.bgColor = inBgColor.value;
+			this.globalSettings.snapGrid = inSnapGrid.checked;
+			this.globalSettings.snapObj = inSnapObj.checked;
+			
+			this.saveSettings();
+			this.applySettings();
+			close();
+		};
+		
+		// Close on outside click
+		window.onclick = (event) => {
+			if (event.target === modal) close();
 		};
 	}
 	
