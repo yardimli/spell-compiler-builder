@@ -253,9 +253,36 @@ export class BuilderScene {
 			
 			// Animate Camera Focus
 			const targetPos = mesh.position.clone();
-			const radius = 10;
-			BABYLON.Animation.CreateAndStartAnimation('camTarget', this.camera, 'target', 60, 30, this.camera.target, targetPos, 0);
-			BABYLON.Animation.CreateAndStartAnimation('camRadius', this.camera, 'radius', 60, 30, this.camera.radius, radius, 0);
+			const targetRadius = 10;
+			const frameRate = 60;
+			const durationFrames = 30; // 0.5 seconds
+			
+			// Stop existing animations
+			this.scene.stopAnimation(this.camera);
+			
+			// Animate Target
+			BABYLON.Animation.CreateAndStartAnimation(
+				'camTarget',
+				this.camera,
+				'target',
+				frameRate,
+				durationFrames,
+				this.camera.target.clone(),
+				targetPos,
+				BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+			);
+			
+			// Animate Radius
+			BABYLON.Animation.CreateAndStartAnimation(
+				'camRadius',
+				this.camera,
+				'radius',
+				frameRate,
+				durationFrames,
+				this.camera.radius,
+				targetRadius,
+				BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+			);
 		}
 	}
 	
