@@ -2,7 +2,7 @@ import * as BABYLON from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 
 const ASSET_FOLDER = "./assets/nature/";
-const TIMEOUT_MS = 10000; // Increased to 10s to allow shader compilation
+const TIMEOUT_MS = 10000;
 
 export async function loadAssets(engine) {
 	// 1. Scan GLB files
@@ -24,11 +24,16 @@ export async function loadAssets(engine) {
 	// 3. Sort
 	glbFiles.forEach(file => {
 		if (cachedThumbnails[file]) {
-			finalAssets.push({ file: file, src: cachedThumbnails[file], generated: false });
+			finalAssets.push({
+				file: file,
+				src: cachedThumbnails[file],
+				generated: false
+			});
 		} else {
 			missingThumbnails.push(file);
 		}
 	});
+	
 	
 	// 4. Generate Missing
 	if (missingThumbnails.length > 0) {
@@ -43,12 +48,10 @@ export async function loadAssets(engine) {
 async function generateThumbnails(engine, files) {
 	const results = [];
 	
-	// Helper to create a fresh scene
 	const createScene = () => {
 		const s = new BABYLON.Scene(engine);
 		s.autoClear = false;
 		s.clearColor = new BABYLON.Color4(0, 0, 0, 0);
-		// Bright generic lighting
 		const h = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), s);
 		h.intensity = 1.5;
 		const d = new BABYLON.DirectionalLight("dir", new BABYLON.Vector3(1, -1, 1), s);
@@ -59,6 +62,11 @@ async function generateThumbnails(engine, files) {
 	let thumbScene = createScene();
 	let thumbCamera = new BABYLON.ArcRotateCamera("thumbCam", 0, 0, 0, BABYLON.Vector3.Zero(), thumbScene);
 	
+	engine.runRenderLoop(() => {
+		thumbScene.render();
+	});
+	
+	
 	for (const file of files) {
 		console.log(`[Loader] Processing: ${file}...`);
 		
@@ -68,14 +76,18 @@ async function generateThumbnails(engine, files) {
 				new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), TIMEOUT_MS))
 			]);
 			
-			// Success
-			triggerDownload(dataUrl, file.replace('.glb', '.png'));
-			results.push({ file: file, src: dataUrl, generated: true });
+			// --- NEW: UPLOAD TO SERVER ---
+			await uploadThumbnail(dataUrl, file.replace('.glb', '.png'));
+			
+			results.push({
+				file: file,
+				src: dataUrl,
+				generated: true
+			});
 			
 		} catch (err) {
 			console.error(`[Loader] Failed ${file}: ${err.message}`);
-			
-			// If failed, dispose and recreate scene to ensure clean state
+			// Recreate scene on error to ensure clean state
 			thumbScene.dispose();
 			thumbScene = createScene();
 			thumbCamera = new BABYLON.ArcRotateCamera("thumbCam", 0, 0, 0, BABYLON.Vector3.Zero(), thumbScene);
@@ -87,7 +99,7 @@ async function generateThumbnails(engine, files) {
 			});
 		}
 		
-		// Small breather
+		// Small delay to allow UI/Logs to update
 		await new Promise(r => setTimeout(r, 100));
 	}
 	
@@ -95,60 +107,94 @@ async function generateThumbnails(engine, files) {
 	return results;
 }
 
-async function processSingleFile(scene, camera, engine, file) {
-	// 1. Import
-	const result = await BABYLON.SceneLoader.ImportMeshAsync("", ASSET_FOLDER, file, scene);
-	const root = result.meshes[0];
-	console.log(`[Thumbnail] Imported root: ${root.name}`);
-	
-	// 2. Stop Animations (prevents weird poses or updates during screenshot)
-	scene.animationGroups.forEach(ag => ag.stop());
-	
-	// 3. Force World Matrix Update (Crucial for Bounding Box)
-	root.computeWorldMatrix(true);
-	result.meshes.forEach(m => m.computeWorldMatrix(true));
-	
-	// 4. Calculate Bounds
-	const worldExtends = scene.getWorldExtends();
-	const min = worldExtends.min;
-	const max = worldExtends.max;
-	
-	// Handle empty bounds
-	if (min.equals(max)) {
-		root.dispose();
-		throw new Error("Empty mesh bounds");
-	}
-	
-	console.log(`[Thumbnail] Bounds Min: ${min.toString()}, Max: ${max.toString()}`);
-	
-	const center = min.add(max).scale(0.5);
-	const radius = max.subtract(min).length() * 0.8;
-	
-	// 5. Position Camera
-	camera.setPosition(new BABYLON.Vector3(0, radius * 0.5, radius * 1.5));
-	camera.setTarget(center);
-	camera.alpha = -Math.PI / 2; // Front view usually
-	camera.beta = Math.PI / 2.5; // Slightly elevated
-	
-	console.log(`[Thumbnail] Camera Pos: ${camera.position.toString()}, Target: ${camera.target.toString()}`);
-	
-	scene.render();
-	console.log(`[Thumbnail] Scene rendered, capturing screenshot...`);
-	BABYLON.Tools.CreateScreenshotUsingRenderTargetAsync(
-		engine,
-		camera,
-		{ width: 128, height: 128 }
-	).then(data => {
-		root.dispose(false, true); // Cleanup
-		resolve(data);
+function processSingleFile(scene, camera, engine, file) {
+	// Return a Promise so we can await the screenshot callback
+	return new Promise(async (resolve, reject) => {
+		let root = null;
+		try {
+			const result = await BABYLON.SceneLoader.ImportMeshAsync("", ASSET_FOLDER, file, scene);
+			root = result.meshes[0];
+			
+			scene.animationGroups.forEach(ag => ag.stop());
+			
+			// Ensure bounds are calculated correctly
+			root.computeWorldMatrix(true);
+			result.meshes.forEach(m => m.computeWorldMatrix(true));
+			
+			const worldExtends = scene.getWorldExtends();
+			const min = worldExtends.min;
+			const max = worldExtends.max;
+			
+			if (min.equals(max)) {
+				// Handle case where mesh has no size (e.g. empty node)
+				min.set(-1, -1, -1);
+				max.set(1, 1, 1);
+			}
+			
+			const center = min.add(max).scale(0.5);
+			const radius = max.subtract(min).length() * 0.8;
+			
+			// Position Camera
+			camera.setPosition(new BABYLON.Vector3(0, radius * 0.5, radius * 1.5));
+			camera.setTarget(center);
+			camera.alpha = -Math.PI / 2;
+			camera.beta = Math.PI / 2.5;
+			
+			// Ensure the camera is the active one for the scene
+			scene.activeCamera = camera;
+			
+			console.log(`[Thumbnail] Camera positioned at ${camera.position.toString()}`);
+			
+			await scene.whenReadyAsync();
+			
+			// Render the scene to the canvas
+			// Since the main render loop is not running yet (init phase), this is safe.
+			scene.render();
+			console.log(`[Thumbnail] Scene rendered for ${file}`);
+			
+			// Create Screenshot
+			// Switched to CreateScreenshotAsync as it captures the canvas buffer directly.
+			// CreateScreenshotUsingRenderTargetAsync can hang if the engine loop isn't active.
+			const screenshotDataUrl = await BABYLON.Tools.CreateScreenshotAsync(
+				engine,
+				camera,
+				{ width: 128, height: 128 },
+				"image/png"
+			);
+			
+			console.log(`[Thumbnail] Screenshot captured for ${file}`);
+			resolve(screenshotDataUrl);
+			
+		} catch (e) {
+			reject(e);
+		} finally {
+			if (root) {
+				root.dispose(false, true);
+			}
+		}
 	});
 }
 
-function triggerDownload(dataUrl, filename) {
-	const a = document.createElement("a");
-	a.href = dataUrl;
-	a.download = filename;
-	document.body.appendChild(a);
-	a.click();
-	document.body.removeChild(a);
+// --- AJAX UPLOAD FUNCTION ---
+async function uploadThumbnail(dataUrl, filename) {
+	try {
+		const response = await fetch('/save-thumbnail', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				filename: filename,
+				image: dataUrl
+			})
+		});
+		
+		if (!response.ok) {
+			console.error("Server failed to save thumbnail");
+		} else {
+			console.log(`[Server] Saved ${filename}`);
+		}
+	} catch (e) {
+		console.error("Error uploading thumbnail:", e);
+	}
 }

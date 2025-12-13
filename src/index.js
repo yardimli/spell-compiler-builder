@@ -22,9 +22,10 @@ async function init() {
 	// 1. Engine Setup
 	engine = new BABYLON.Engine(canvas, true, {
 		disableWebGL2Support: false,
-		useHighPrecisionMatrix: true
+		useHighPrecisionMatrix: true,
+		preserveDrawingBuffer: true,
+		stencil: true
 	});
-	engine.getCaps().parallelShaderCompile = true;
 	
 	// 2. Scene Setup
 	scene = new BABYLON.Scene(engine);

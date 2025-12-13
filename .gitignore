@@ -2,3 +2,4 @@
 /.idea
 /.scp
 package-lock.json
+/assets/cache
