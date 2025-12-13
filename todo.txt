@@ -1,3 +1,19 @@
+#TODO
+
+- make snapping to grid optional (toggle button in the UI)
+- make snapping to other objects optional (toggle button in the UI)
+- snapping should look at all corner combinations and snap the closest one and only choose the one that doesnt make objects overlap
+- all added objects to the canvas should have a name property that can be edited
+- add a property panel for selected objects, where user can edit position (x,y,z), rotation, scale (x and y)
+- implement undo and redo functionality
+- create a new js file for managing the objects
+- create a new js file for the property panel UI
+
+- enable multi-selection of objects
+
+
+#DONE
+
 - the scroll wheel is not working it should zoom in and out of the canvas
 - right click should pan the canvas
 - the magnetic lock should lock the sides of objects, not center it should not make objects overlap
@@ -5,14 +21,3 @@
 - add a cursor on the canvas clicking on the grid will select the update the selected cell
 - remove the drag and drop functionality for adding objects to the canvas, instead clicking on an object should add it to the center of the selected cell
 - double clicking on an object should make the camera center on that object and zoom in
-
-- make snapping to grid optional (toggle button in the UI)
-- make snapping to other objects optional (toggle button in the UI)
-- snapping should look at all corner combinations and snap the closest one and only choose the one that doesnt make objects overlap
-- all added objects to the canvas should have a name property that can be edited
-- allow to rotate and scale objects in the canvas
-- allow to change the y position of objects (drag them up and down)
-- add a property panel for selected objects, where user can edit position (x,y,z), rotation, scale (x and y)
-- implement undo and redo functionality
-
-- enable multi-selection of objects

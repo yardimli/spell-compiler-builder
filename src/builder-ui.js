@@ -1,12 +1,17 @@
+import { PropertyPanel } from './property-panel';
+
 export class BuilderUI {
-	constructor (sceneManager) {
-		this.sceneManager = sceneManager;
+	constructor (builderScene) {
+		this.scene = builderScene;
+		this.manager = builderScene.objectManager;
 		this.currentMapName = 'new_map';
+		this.propertyPanel = new PropertyPanel(this.manager);
 	}
 	
 	setup (assets) {
 		this.buildSidebar(assets);
 		this.setupControls();
+		this.setupHistoryUI();
 	}
 	
 	buildSidebar (assets) {
@@ -16,7 +21,6 @@ export class BuilderUI {
 		assets.forEach(asset => {
 			const div = document.createElement('div');
 			div.className = 'asset-item';
-			// Removed draggable=true
 			
 			const img = document.createElement('img');
 			img.className = 'asset-thumb';
@@ -29,9 +33,8 @@ export class BuilderUI {
 			div.appendChild(img);
 			div.appendChild(span);
 			
-			// Click to Add
 			div.addEventListener('click', () => {
-				this.sceneManager.addAssetAtCursor(asset.file);
+				this.manager.addAsset(asset.file, this.scene.selectedCellPosition);
 			});
 			
 			grid.appendChild(div);
@@ -45,8 +48,15 @@ export class BuilderUI {
 		slider.oninput = (e) => {
 			const size = parseInt(e.target.value);
 			label.innerText = size + ' units';
-			this.sceneManager.updateGridSize(size);
+			this.scene.updateGridSize(size);
 		};
+		
+		// Snapping Toggles
+		const chkSnapGrid = document.getElementById('chkSnapGrid');
+		const chkSnapObj = document.getElementById('chkSnapObj');
+		
+		chkSnapGrid.onchange = (e) => { this.manager.snapToGrid = e.target.checked; };
+		chkSnapObj.onchange = (e) => { this.manager.snapToObjects = e.target.checked; };
 		
 		// Map Name
 		const mapNameInput = document.getElementById('mapName');
@@ -56,7 +66,7 @@ export class BuilderUI {
 		
 		// Save
 		document.getElementById('btnSave').onclick = () => {
-			const data = this.sceneManager.getMapData(this.currentMapName);
+			const data = this.manager.getMapData(this.currentMapName);
 			this.downloadJSON(data, this.currentMapName);
 		};
 		
@@ -66,7 +76,7 @@ export class BuilderUI {
 			if (newName) {
 				this.currentMapName = newName;
 				mapNameInput.value = newName;
-				const data = this.sceneManager.getMapData(newName);
+				const data = this.manager.getMapData(newName);
 				this.downloadJSON(data, newName);
 			}
 		};
@@ -82,7 +92,7 @@ export class BuilderUI {
 					const data = JSON.parse(evt.target.result);
 					this.currentMapName = data.name || 'loaded_map';
 					mapNameInput.value = this.currentMapName;
-					this.sceneManager.loadMapData(data);
+					this.manager.loadMapData(data);
 				} catch (err) {
 					console.error(err);
 					alert('Invalid map file');
@@ -94,7 +104,20 @@ export class BuilderUI {
 		
 		// Add Light
 		document.getElementById('btnAddLight').onclick = () => {
-			this.sceneManager.addLightAtCursor();
+			this.manager.addLight(this.scene.selectedCellPosition);
+		};
+	}
+	
+	setupHistoryUI () {
+		const btnUndo = document.getElementById('btnUndo');
+		const btnRedo = document.getElementById('btnRedo');
+		
+		btnUndo.onclick = () => this.manager.undo();
+		btnRedo.onclick = () => this.manager.redo();
+		
+		this.manager.onHistoryChange = () => {
+			btnUndo.disabled = this.manager.historyIndex < 0;
+			btnRedo.disabled = this.manager.historyIndex >= this.manager.history.length - 1;
 		};
 	}
 	
