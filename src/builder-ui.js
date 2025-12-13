@@ -10,7 +10,7 @@ export class BuilderUI {
 		if (this.manager) {
 			this.propertyPanel = new PropertyPanel(this.manager);
 		} else {
-			console.error("BuilderUI: ObjectManager is null during initialization.");
+			console.error('BuilderUI: ObjectManager is null during initialization.');
 		}
 	}
 	
@@ -21,29 +21,74 @@ export class BuilderUI {
 	}
 	
 	buildSidebar (assets) {
-		const grid = document.getElementById('asset-grid');
-		grid.innerHTML = '';
+		const listContainer = document.getElementById('asset-list');
+		listContainer.innerHTML = '';
+		
+		// 1. Group assets by category (prefix before first underscore)
+		const categories = {};
 		
 		assets.forEach(asset => {
-			const div = document.createElement('div');
-			div.className = 'asset-item';
+			// Extract category: "nature_rock.glb" -> "nature"
+			const parts = asset.file.split('_');
+			const category = parts.length > 1 ? parts[0] : 'misc';
 			
-			const img = document.createElement('img');
-			img.className = 'asset-thumb';
-			img.src = asset.src;
+			if (!categories[category]) {
+				categories[category] = [];
+			}
+			categories[category].push(asset);
+		});
+		
+		// 2. Create UI for each category
+		Object.keys(categories).sort().forEach(categoryName => {
+			// Create Header
+			const header = document.createElement('div');
+			header.className = 'category-header';
+			header.innerText = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
 			
-			const span = document.createElement('span');
-			span.className = 'asset-name';
-			span.innerText = asset.file;
+			// Create Grid Container
+			const grid = document.createElement('div');
+			grid.className = 'category-grid';
 			
-			div.appendChild(img);
-			div.appendChild(span);
-			
-			div.addEventListener('click', () => {
-				this.manager.addAsset(asset.file, this.scene.selectedCellPosition);
+			// Toggle functionality
+			header.addEventListener('click', () => {
+				header.classList.toggle('collapsed');
+				grid.classList.toggle('hidden');
 			});
 			
-			grid.appendChild(div);
+			// Add Assets to Grid
+			categories[categoryName].forEach(asset => {
+				const div = document.createElement('div');
+				div.className = 'asset-item';
+				
+				const img = document.createElement('img');
+				img.className = 'asset-thumb';
+				img.src = asset.src;
+				
+				// Clean label: remove extension and category prefix
+				// "nature_rock_large.glb" -> "rock_large"
+				let cleanName = asset.file.replace(/\.glb$/i, '');
+				if (categoryName !== 'misc' && cleanName.startsWith(categoryName + '_')) {
+					cleanName = cleanName.substring(categoryName.length + 1);
+				}
+				// Replace remaining underscores with spaces for better readability (optional, but good for UI)
+				cleanName = cleanName.replace(/_/g, ' ');
+				
+				const span = document.createElement('span');
+				span.className = 'asset-name';
+				span.innerText = cleanName;
+				
+				div.appendChild(img);
+				div.appendChild(span);
+				
+				div.addEventListener('click', () => {
+					this.manager.addAsset(asset.file, this.scene.selectedCellPosition);
+				});
+				
+				grid.appendChild(div);
+			});
+			
+			listContainer.appendChild(header);
+			listContainer.appendChild(grid);
 		});
 	}
 	
@@ -52,7 +97,7 @@ export class BuilderUI {
 		const slider = document.getElementById('gridSizeInput');
 		const label = document.getElementById('gridSizeLabel');
 		slider.oninput = (e) => {
-			const size = parseInt(e.target.value);
+			const size = parseFloat(e.target.value);
 			label.innerText = size + ' units';
 			this.scene.updateGridSize(size);
 		};

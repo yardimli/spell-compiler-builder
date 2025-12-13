@@ -104,7 +104,8 @@ export class BuilderScene {
 		
 		// Grid Lines
 		ctx.strokeStyle = '#555555';
-		ctx.lineWidth = 2;
+		// Reduced line width to 1 (50% smaller visually) to match the tighter grid
+		ctx.lineWidth = 1;
 		
 		const minX = -width / 2;
 		const minZ = -height / 2;

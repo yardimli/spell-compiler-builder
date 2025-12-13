@@ -14,7 +14,8 @@ export class ObjectManager {
 		// Settings
 		this.snapToGrid = true;
 		this.snapToObjects = false;
-		this.gridSize = 5;
+		// Changed default to 2.5 (50% smaller than previous 5)
+		this.gridSize = 2.5;
 		
 		// Undo/Redo
 		this.history = [];
@@ -23,7 +24,7 @@ export class ObjectManager {
 		
 		// Events
 		this.onSelectionChange = null; // Callback for UI
-		this.onHistoryChange = null;   // Callback for UI
+		this.onHistoryChange = null; // Callback for UI
 	}
 	
 	// --- History Management ---
@@ -97,7 +98,22 @@ export class ObjectManager {
 	async addAsset (filename, position) {
 		try {
 			const id = BABYLON.Tools.RandomId();
-			const name = `Obj_${id}`;
+			
+			// Generate Unique Name: filename_1, filename_2, etc.
+			const baseName = filename.replace(/\.glb$/i, '');
+			const existing = this.placedObjects.filter(o => o.name && o.name.startsWith(baseName));
+			
+			let maxIndex = 0;
+			existing.forEach(o => {
+				// Extract suffix number
+				const parts = o.name.split('_');
+				const suffix = parseInt(parts[parts.length - 1]);
+				if (!isNaN(suffix) && suffix > maxIndex) {
+					maxIndex = suffix;
+				}
+			});
+			
+			const uniqueName = `${baseName}_${maxIndex + 1}`;
 			
 			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_FOLDER, filename, this.scene);
 			const root = result.meshes[0];
@@ -106,7 +122,7 @@ export class ObjectManager {
 			const bounds = root.getHierarchyBoundingVectors();
 			const heightOffset = -bounds.min.y;
 			
-			root.name = name;
+			root.name = uniqueName;
 			root.position = new BABYLON.Vector3(position.x, position.y + heightOffset, position.z);
 			root.metadata = { id: id, isObject: true, file: filename };
 			
@@ -120,7 +136,7 @@ export class ObjectManager {
 			
 			const objData = {
 				id: id,
-				name: name,
+				name: uniqueName,
 				file: filename,
 				type: 'mesh',
 				position: root.position.asArray(),
@@ -140,7 +156,9 @@ export class ObjectManager {
 	
 	addLight (position) {
 		const id = BABYLON.Tools.RandomId();
-		const name = `Light_${id}`;
+		// Unique name for lights too
+		const existingLights = this.placedObjects.filter(o => o.type === 'light');
+		const name = `Light_${existingLights.length + 1}`;
 		
 		const light = new BABYLON.PointLight(name, new BABYLON.Vector3(position.x, 5, position.z), this.scene);
 		light.intensity = 0.5;

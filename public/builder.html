@@ -21,16 +21,41 @@
 		}
 		#sidebar-header { padding: 15px; background: #1a252f; font-weight: bold; }
 		
-		/* Asset Grid */
-		#asset-grid {
+		/* Asset List Container */
+		#asset-list {
 			flex: 1;
 			overflow-y: auto;
+			display: flex;
+			flex-direction: column;
+		}
+		
+		/* Category Headers */
+		.category-header {
+			background: #34495e;
+			padding: 10px 15px;
+			cursor: pointer;
+			font-weight: bold;
+			border-bottom: 1px solid #2c3e50;
+			border-top: 1px solid #46607a;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			user-select: none;
+		}
+		.category-header:hover { background: #3e5871; }
+		.category-header::after { content: '▼'; font-size: 10px; transition: transform 0.2s; }
+		.category-header.collapsed::after { transform: rotate(-90deg); }
+		
+		/* Asset Grid (per category) */
+		.category-grid {
 			display: grid;
 			grid-template-columns: repeat(2, 1fr);
 			gap: 5px;
 			padding: 10px;
-			align-content: start;
+			background: #233342;
 		}
+		.category-grid.hidden { display: none; }
+		
 		.asset-item {
 			background: #34495e;
 			border: 1px solid #46607a;
@@ -46,7 +71,7 @@
 		.asset-item:active { background: #27ae60; }
 		
 		.asset-thumb { width: 100%; height: 100px; object-fit: cover; background: #000; margin-bottom: 5px; pointer-events: none; }
-		.asset-name { font-size: 10px; text-align: center; word-break: break-all; pointer-events: none; }
+		.asset-name { font-size: 10px; text-align: center; word-break: break-all; pointer-events: none; text-transform: capitalize; }
 		
 		/* Controls */
 		#controls { padding: 15px; background: #1a252f; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
@@ -95,7 +120,8 @@
 	<!-- Left Sidebar -->
 	<div id="sidebar">
 		<div id="sidebar-header">Map Builder Assets</div>
-		<div id="asset-grid"></div>
+		<!-- Renamed id to be more generic as it contains categories now -->
+		<div id="asset-list"></div>
 		<div id="controls">
 			<div class="control-row">
 				<button id="btnUndo" class="secondary" disabled>Undo</button>
@@ -112,8 +138,9 @@
 			
 			<div class="control-group">
 				<label>Grid Size:</label>
-				<input type="range" id="gridSizeInput" min="1" max="20" value="5">
-				<span id="gridSizeLabel">5 units</span>
+				<!-- Updated default value and step for finer control -->
+				<input type="range" id="gridSizeInput" min="0.5" max="10" step="0.5" value="2.5">
+				<span id="gridSizeLabel">2.5 units</span>
 			</div>
 			
 			<div class="control-group">
