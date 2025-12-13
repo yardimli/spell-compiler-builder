@@ -19,7 +19,7 @@ export class BuilderScene {
 		this.selectedCellPosition = new BABYLON.Vector3(0, 0, 0);
 		this.isDragging = false;
 		this.draggedMesh = null;
-		this.dragOffset = new BABYLON.Vector3(0, 0, 0); // Offset to prevent snapping to center
+		this.dragOffset = new BABYLON.Vector3(0, 0, 0);
 	}
 	
 	async init () {
@@ -205,13 +205,10 @@ export class BuilderScene {
 					this.isDragging = true;
 					this.camera.detachControl();
 					
-					// Calculate Offset:
-					// Find where on the ground we clicked, relative to the object's anchor
+					// Calculate Offset
 					const groundPick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m) => m === this.groundMesh);
 					if (groundPick.hit) {
-						// Offset = ObjectPos - MouseGroundPos
 						this.dragOffset = mesh.position.subtract(groundPick.pickedPoint);
-						// Keep Y offset 0 usually, unless we want to preserve height diff relative to ground click
 						this.dragOffset.y = 0;
 					}
 					
@@ -227,10 +224,8 @@ export class BuilderScene {
 		if (this.isDragging && this.draggedMesh) {
 			const groundPick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m) => m === this.groundMesh);
 			if (groundPick.hit) {
-				// Apply the offset calculated at start of drag
 				const targetPos = groundPick.pickedPoint.add(this.dragOffset);
-				targetPos.y = this.draggedMesh.position.y; // Maintain original height
-				
+				targetPos.y = this.draggedMesh.position.y;
 				this.objectManager.handleDrag(this.draggedMesh, targetPos);
 			}
 		}
@@ -256,12 +251,10 @@ export class BuilderScene {
 			const targetPos = mesh.position.clone();
 			const targetRadius = 10;
 			const frameRate = 60;
-			const durationFrames = 30; // 0.5 seconds
+			const durationFrames = 30;
 			
-			// Stop existing animations
 			this.scene.stopAnimation(this.camera);
 			
-			// Animate Target
 			BABYLON.Animation.CreateAndStartAnimation(
 				'camTarget',
 				this.camera,
@@ -273,7 +266,6 @@ export class BuilderScene {
 				BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
 			);
 			
-			// Animate Radius
 			BABYLON.Animation.CreateAndStartAnimation(
 				'camRadius',
 				this.camera,

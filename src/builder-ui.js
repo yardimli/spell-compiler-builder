@@ -5,7 +5,13 @@ export class BuilderUI {
 		this.scene = builderScene;
 		this.manager = builderScene.objectManager;
 		this.currentMapName = 'new_map';
-		this.propertyPanel = new PropertyPanel(this.manager);
+		
+		// Ensure manager exists before creating panel
+		if (this.manager) {
+			this.propertyPanel = new PropertyPanel(this.manager);
+		} else {
+			console.error("BuilderUI: ObjectManager is null during initialization.");
+		}
 	}
 	
 	setup (assets) {

@@ -4,22 +4,30 @@ export class PropertyPanel {
 	constructor (objectManager) {
 		this.objectManager = objectManager;
 		this.panel = document.getElementById('properties-panel');
+		
+		// Cache inputs with safety check
+		const getEl = (id) => {
+			const el = document.getElementById(id);
+			if (!el) console.warn(`PropertyPanel: Element #${id} not found.`);
+			return el;
+		};
+		
 		this.inputs = {
-			name: document.getElementById('propName'),
+			name: getEl('propName'),
 			pos: {
-				x: document.getElementById('posX'),
-				y: document.getElementById('posY'),
-				z: document.getElementById('posZ')
+				x: getEl('posX'),
+				y: getEl('posY'),
+				z: getEl('posZ')
 			},
 			rot: {
-				x: document.getElementById('rotX'),
-				y: document.getElementById('rotY'),
-				z: document.getElementById('rotZ')
+				x: getEl('rotX'),
+				y: getEl('rotY'),
+				z: getEl('rotZ')
 			},
 			scale: {
-				x: document.getElementById('scaleX'),
-				y: document.getElementById('scaleY'),
-				z: document.getElementById('scaleZ')
+				x: getEl('scaleX'),
+				y: getEl('scaleY'),
+				z: getEl('scaleZ')
 			}
 		};
 		
@@ -29,10 +37,14 @@ export class PropertyPanel {
 		this.setupListeners();
 		
 		// Subscribe to object manager events
-		this.objectManager.onSelectionChange = (data) => this.updateUI(data);
+		if (this.objectManager) {
+			this.objectManager.onSelectionChange = (data) => this.updateUI(data);
+		}
 	}
 	
 	setupListeners () {
+		if (!this.inputs.name) return; // Abort if UI not ready
+		
 		// Name
 		this.inputs.name.onchange = (e) => {
 			if (this.currentObjectId) {
@@ -42,15 +54,18 @@ export class PropertyPanel {
 		
 		// Position
 		['x', 'y', 'z'].forEach(axis => {
-			this.inputs.pos[axis].onchange = () => this.emitTransformChange('position');
-			this.inputs.rot[axis].onchange = () => this.emitTransformChange('rotation');
-			this.inputs.scale[axis].onchange = () => this.emitTransformChange('scaling');
+			if (this.inputs.pos[axis]) this.inputs.pos[axis].onchange = () => this.emitTransformChange('position');
+			if (this.inputs.rot[axis]) this.inputs.rot[axis].onchange = () => this.emitTransformChange('rotation');
+			if (this.inputs.scale[axis]) this.inputs.scale[axis].onchange = () => this.emitTransformChange('scaling');
 		});
 		
 		// Delete
-		document.getElementById('btnDeleteObj').onclick = () => {
-			this.objectManager.deleteSelected();
-		};
+		const btnDelete = document.getElementById('btnDeleteObj');
+		if (btnDelete) {
+			btnDelete.onclick = () => {
+				this.objectManager.deleteSelected();
+			};
+		}
 	}
 	
 	emitTransformChange (type) {
@@ -62,7 +77,7 @@ export class PropertyPanel {
 			z: parseFloat(this.inputs[type === 'position' ? 'pos' : (type === 'rotation' ? 'rot' : 'scale')].z.value) || 0
 		};
 		
-		// For Scale, ensure no zeros if desired, but 0 is valid in 3D (invisible)
+		// For Scale, ensure no zeros
 		if (type === 'scaling') {
 			if (values.x === 0) values.x = 0.001;
 			if (values.y === 0) values.y = 0.001;
@@ -73,6 +88,8 @@ export class PropertyPanel {
 	}
 	
 	updateUI (data) {
+		if (!this.panel) return;
+		
 		this.isUpdatingUI = true;
 		
 		if (!data) {
@@ -82,22 +99,22 @@ export class PropertyPanel {
 			this.panel.style.display = 'flex';
 			this.currentObjectId = data.id;
 			
-			this.inputs.name.value = data.name;
+			if (this.inputs.name) this.inputs.name.value = data.name || '';
 			
 			// Position
-			this.inputs.pos.x.value = parseFloat(data.position[0]).toFixed(2);
-			this.inputs.pos.y.value = parseFloat(data.position[1]).toFixed(2);
-			this.inputs.pos.z.value = parseFloat(data.position[2]).toFixed(2);
+			if (this.inputs.pos.x) this.inputs.pos.x.value = parseFloat(data.position[0]).toFixed(2);
+			if (this.inputs.pos.y) this.inputs.pos.y.value = parseFloat(data.position[1]).toFixed(2);
+			if (this.inputs.pos.z) this.inputs.pos.z.value = parseFloat(data.position[2]).toFixed(2);
 			
 			// Rotation (Radians to Degrees)
-			this.inputs.rot.x.value = BABYLON.Tools.ToDegrees(data.rotation[0]).toFixed(1);
-			this.inputs.rot.y.value = BABYLON.Tools.ToDegrees(data.rotation[1]).toFixed(1);
-			this.inputs.rot.z.value = BABYLON.Tools.ToDegrees(data.rotation[2]).toFixed(1);
+			if (this.inputs.rot.x) this.inputs.rot.x.value = BABYLON.Tools.ToDegrees(data.rotation[0]).toFixed(1);
+			if (this.inputs.rot.y) this.inputs.rot.y.value = BABYLON.Tools.ToDegrees(data.rotation[1]).toFixed(1);
+			if (this.inputs.rot.z) this.inputs.rot.z.value = BABYLON.Tools.ToDegrees(data.rotation[2]).toFixed(1);
 			
 			// Scale
-			this.inputs.scale.x.value = parseFloat(data.scaling[0]).toFixed(2);
-			this.inputs.scale.y.value = parseFloat(data.scaling[1]).toFixed(2);
-			this.inputs.scale.z.value = parseFloat(data.scaling[2]).toFixed(2);
+			if (this.inputs.scale.x) this.inputs.scale.x.value = parseFloat(data.scaling[0]).toFixed(2);
+			if (this.inputs.scale.y) this.inputs.scale.y.value = parseFloat(data.scaling[1]).toFixed(2);
+			if (this.inputs.scale.z) this.inputs.scale.z.value = parseFloat(data.scaling[2]).toFixed(2);
 		}
 		
 		this.isUpdatingUI = false;
