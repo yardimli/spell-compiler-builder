@@ -1,0 +1,4 @@
+/node_modules
+/.idea
+/.scp
+package-lock.json
