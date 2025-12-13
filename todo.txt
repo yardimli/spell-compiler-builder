@@ -1,21 +1,30 @@
 #TODO
 
 #TODO 4
--bug: undo doesnt work properly after deleting an object or moving an object
-- allow y offset of new objects added to the canvas so they dont intersect with the grid (create a global settings in ui, it should also allow to scale all new objects)
-- allow user to lock existing objects so they cant be moved or deleted
-- allow user to change the color of the grid (create a global settings in ui)
-- allow user to change the size of the grid cells (create a global settings in ui)
-- allow user to change the background color of the canvas (create a global settings in ui)
+- bug: undo doesnt work properly after deleting an object or moving an object
+
+- on the sidebar all categories should be collapsed by default (save the state in local storage and load state on startup)
+
+- create a global settings modal in the UI
+- in global settings ui add:
+- allow y offset of new objects added to the canvas so they dont intersect with the grid
+- allow user to change the color of the grid
+- allow user to change the size multiplier of the grid cells
+- allow user to change the background color of the canvas
 - start with snapping to grid disabled and snapping to objects enabled make it part of the global settings modal
 - save global settings in local storage so they persist between sessions
-- save current map to local storage so it persists between sessions
-- add a button to clear the current map
+
 
 
 #TODO 5
 
 - enable multi-selection of objects
+- force shift key to be pressed to use mouse for multi-selection, when shift is pressed pan and zoom should be disabled
+- allow moving multiple selected objects at the same time
+- allow deleting multiple selected objects at the same time
+- when adding new objects if an object is already selected add the new object on top of the selected object
+- allow user to lock existing objects so they cant be moved or deleted (in property panel add a lock toggle)
+- save current map to local storage so it persists between sessions
 
 
 #DONE

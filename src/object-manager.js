@@ -1,4 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
+import { UndoRedoManager } from './undo-redo';
 
 const ASSET_FOLDER = './assets/nature/';
 
@@ -14,83 +15,13 @@ export class ObjectManager {
 		// Settings
 		this.snapToGrid = true;
 		this.snapToObjects = false;
-		// Changed default to 2.5 (50% smaller than previous 5)
 		this.gridSize = 2.5;
 		
-		// Undo/Redo
-		this.history = [];
-		this.historyIndex = -1;
-		this.maxHistory = 50;
+		// Initialize Undo/Redo Manager
+		this.undoRedo = new UndoRedoManager(this);
 		
 		// Events
 		this.onSelectionChange = null; // Callback for UI
-		this.onHistoryChange = null; // Callback for UI
-	}
-	
-	// --- History Management ---
-	
-	addToHistory (action) {
-		// Remove any future history if we are in the middle of the stack
-		if (this.historyIndex < this.history.length - 1) {
-			this.history = this.history.slice(0, this.historyIndex + 1);
-		}
-		
-		this.history.push(action);
-		if (this.history.length > this.maxHistory) {
-			this.history.shift();
-		} else {
-			this.historyIndex++;
-		}
-		
-		if (this.onHistoryChange) this.onHistoryChange();
-	}
-	
-	undo () {
-		if (this.historyIndex < 0) return;
-		
-		const action = this.history[this.historyIndex];
-		this.revertAction(action);
-		this.historyIndex--;
-		
-		if (this.onHistoryChange) this.onHistoryChange();
-	}
-	
-	redo () {
-		if (this.historyIndex >= this.history.length - 1) return;
-		
-		this.historyIndex++;
-		const action = this.history[this.historyIndex];
-		this.applyAction(action);
-		
-		if (this.onHistoryChange) this.onHistoryChange();
-	}
-	
-	applyAction (action) {
-		switch (action.type) {
-			case 'ADD':
-				this.restoreObject(action.data);
-				break;
-			case 'DELETE':
-				this.removeObjectById(action.id, false);
-				break;
-			case 'TRANSFORM':
-				this.updateObjectTransform(action.id, action.newData, false);
-				break;
-		}
-	}
-	
-	revertAction (action) {
-		switch (action.type) {
-			case 'ADD':
-				this.removeObjectById(action.data.id, false);
-				break;
-			case 'DELETE':
-				this.restoreObject(action.data);
-				break;
-			case 'TRANSFORM':
-				this.updateObjectTransform(action.id, action.oldData, false);
-				break;
-		}
 	}
 	
 	// --- Object Management ---
@@ -105,7 +36,6 @@ export class ObjectManager {
 			
 			let maxIndex = 0;
 			existing.forEach(o => {
-				// Extract suffix number
 				const parts = o.name.split('_');
 				const suffix = parseInt(parts[parts.length - 1]);
 				if (!isNaN(suffix) && suffix > maxIndex) {
@@ -130,7 +60,6 @@ export class ObjectManager {
 				this.shadowGenerator.addShadowCaster(m, true);
 				m.receiveShadows = true;
 				m.isPickable = true;
-				// Link back to root for picking
 				if (m !== root) m.parent = root;
 			});
 			
@@ -147,7 +76,8 @@ export class ObjectManager {
 			this.placedObjects.push(objData);
 			this.selectObject(root);
 			
-			this.addToHistory({ type: 'ADD', data: objData });
+			// Add to history via new manager
+			this.undoRedo.add({ type: 'ADD', data: objData });
 			
 		} catch (err) {
 			console.error('Error adding asset:', err);
@@ -156,7 +86,6 @@ export class ObjectManager {
 	
 	addLight (position) {
 		const id = BABYLON.Tools.RandomId();
-		// Unique name for lights too
 		const existingLights = this.placedObjects.filter(o => o.type === 'light');
 		const name = `Light_${existingLights.length + 1}`;
 		
@@ -182,7 +111,7 @@ export class ObjectManager {
 		
 		this.placedObjects.push(objData);
 		this.selectObject(light);
-		this.addToHistory({ type: 'ADD', data: objData });
+		this.undoRedo.add({ type: 'ADD', data: objData });
 	}
 	
 	deleteSelected () {
@@ -192,7 +121,7 @@ export class ObjectManager {
 		const objData = this.placedObjects.find(o => o.id === id);
 		
 		if (objData) {
-			this.addToHistory({ type: 'DELETE', id: id, data: objData });
+			this.undoRedo.add({ type: 'DELETE', id: id, data: objData });
 			this.removeObjectById(id, true);
 		}
 	}
@@ -342,7 +271,7 @@ export class ObjectManager {
 				this.placedObjects[objIndex].scaling = currentData.scaling;
 			}
 			
-			this.addToHistory({
+			this.undoRedo.add({
 				type: 'TRANSFORM',
 				id: id,
 				oldData: this.dragStartData,
@@ -447,7 +376,6 @@ export class ObjectManager {
 			mesh.name = value;
 			objData.name = value;
 			// Name change doesn't strictly need undo/redo for geometry, but good to have.
-			// Skipping complex undo for name to keep it simple, or add a generic UPDATE action.
 			return;
 		}
 		
@@ -474,12 +402,36 @@ export class ObjectManager {
 			scaling: mesh.scaling.asArray()
 		};
 		
-		this.addToHistory({
+		this.undoRedo.add({
 			type: 'TRANSFORM',
 			id: id,
 			oldData: oldData,
 			newData: newData
 		});
+	}
+	
+	// --- NEW: Method required by UndoRedoManager ---
+	updateObjectTransform (id, data) {
+		const mesh = this.findMeshById(id);
+		if (!mesh) return;
+		
+		// Update Mesh
+		mesh.position = BABYLON.Vector3.FromArray(data.position);
+		mesh.rotation = BABYLON.Vector3.FromArray(data.rotation);
+		mesh.scaling = BABYLON.Vector3.FromArray(data.scaling);
+		
+		// Update Internal Data
+		const objData = this.placedObjects.find(o => o.id === id);
+		if (objData) {
+			objData.position = data.position;
+			objData.rotation = data.rotation;
+			objData.scaling = data.scaling;
+		}
+		
+		// Refresh UI if this object is selected
+		if (this.selectedMesh === mesh && this.onSelectionChange) {
+			this.onSelectionChange(objData);
+		}
 	}
 	
 	// Load/Save Helpers
@@ -501,8 +453,11 @@ export class ObjectManager {
 		});
 		
 		this.placedObjects = [];
-		this.history = [];
-		this.historyIndex = -1;
+		// Reset history via manager
+		this.undoRedo.history = [];
+		this.undoRedo.historyIndex = -1;
+		if (this.undoRedo.onHistoryChange) this.undoRedo.onHistoryChange();
+		
 		this.selectObject(null);
 		
 		if (data.assets) {

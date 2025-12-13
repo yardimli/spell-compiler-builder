@@ -65,12 +65,10 @@ export class BuilderUI {
 				img.src = asset.src;
 				
 				// Clean label: remove extension and category prefix
-				// "nature_rock_large.glb" -> "rock_large"
 				let cleanName = asset.file.replace(/\.glb$/i, '');
 				if (categoryName !== 'misc' && cleanName.startsWith(categoryName + '_')) {
 					cleanName = cleanName.substring(categoryName.length + 1);
 				}
-				// Replace remaining underscores with spaces for better readability (optional, but good for UI)
 				cleanName = cleanName.replace(/_/g, ' ');
 				
 				const span = document.createElement('span');
@@ -163,12 +161,13 @@ export class BuilderUI {
 		const btnUndo = document.getElementById('btnUndo');
 		const btnRedo = document.getElementById('btnRedo');
 		
-		btnUndo.onclick = () => this.manager.undo();
-		btnRedo.onclick = () => this.manager.redo();
+		// Updated to use the new undoRedo manager property
+		btnUndo.onclick = () => this.manager.undoRedo.undo();
+		btnRedo.onclick = () => this.manager.undoRedo.redo();
 		
-		this.manager.onHistoryChange = () => {
-			btnUndo.disabled = this.manager.historyIndex < 0;
-			btnRedo.disabled = this.manager.historyIndex >= this.manager.history.length - 1;
+		this.manager.undoRedo.onHistoryChange = () => {
+			btnUndo.disabled = this.manager.undoRedo.historyIndex < 0;
+			btnRedo.disabled = this.manager.undoRedo.historyIndex >= this.manager.undoRedo.history.length - 1;
 		};
 	}
 	
