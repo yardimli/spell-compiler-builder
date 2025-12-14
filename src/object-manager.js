@@ -39,12 +39,22 @@ export class ObjectManager {
 	async addAsset (filename, position) {
 		try {
 			// STACKING LOGIC: Check if a single object is selected to stack on top
-			let stackHeight = 0;
+			// Default to cursor position
+			let targetX = position.x;
+			let targetZ = position.z;
+			let baseY = position.y;
+			
 			if (this.selectedMeshes.length === 1) {
 				const baseMesh = this.selectedMeshes[0];
-				// Calculate world max Y of the base mesh
+				// Calculate world bounds of the base mesh
 				const bounds = baseMesh.getHierarchyBoundingVectors();
-				stackHeight = bounds.max.y;
+				
+				// Override X and Z to center of selected object
+				targetX = (bounds.min.x + bounds.max.x) / 2;
+				targetZ = (bounds.min.z + bounds.max.z) / 2;
+				
+				// Override Base Y to top of selected object
+				baseY = bounds.max.y;
 			}
 			
 			const id = BABYLON.Tools.RandomId();
@@ -73,11 +83,8 @@ export class ObjectManager {
 			
 			root.name = uniqueName;
 			
-			// Apply position: Cursor/Grid pos + Pivot Offset + Default Offset + Stacking Height
-			// If stacking, we use the stackHeight as base Y. If not, we use position.y (usually 0)
-			const baseY = (this.selectedMeshes.length === 1) ? stackHeight : position.y;
-			
-			root.position = new BABYLON.Vector3(position.x, baseY + heightOffset + this.defaultYOffset, position.z);
+			// Apply position: Target X/Z + Base Y + Pivot Offset + Default Offset
+			root.position = new BABYLON.Vector3(targetX, baseY + heightOffset + this.defaultYOffset, targetZ);
 			root.metadata = { id: id, isObject: true, file: filename };
 			
 			result.meshes.forEach(m => {
