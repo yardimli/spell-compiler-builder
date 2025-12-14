@@ -37,6 +37,13 @@ export class PropertyPanel {
 			}
 		};
 		
+		// Alignment Buttons
+		this.alignButtons = {
+			x: getEl('btnAlignX'),
+			y: getEl('btnAlignY'),
+			z: getEl('btnAlignZ')
+		};
+		
 		this.currentObjectId = null;
 		this.isUpdatingUI = false;
 		
@@ -78,6 +85,11 @@ export class PropertyPanel {
 			if (this.inputs.rot[axis]) this.inputs.rot[axis].onchange = () => this.emitTransformChange('rotation');
 			if (this.inputs.scale[axis]) this.inputs.scale[axis].onchange = () => this.emitTransformChange('scaling');
 		});
+		
+		// Alignment
+		if (this.alignButtons.x) this.alignButtons.x.onclick = () => this.objectManager.alignSelection('x');
+		if (this.alignButtons.y) this.alignButtons.y.onclick = () => this.objectManager.alignSelection('y');
+		if (this.alignButtons.z) this.alignButtons.z.onclick = () => this.objectManager.alignSelection('z');
 		
 		// Delete
 		const btnDelete = document.getElementById('btnDeleteObj');

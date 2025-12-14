@@ -125,10 +125,6 @@ export class ObjectManager {
 			const depth = bounds.max.z - bounds.min.z;
 			const heightOffset = -bounds.min.y;
 			
-			// We will instantiate/clone this for the grid
-			// But first, let's set up the first one properly or just use it as a template and dispose it?
-			// Let's use it as the first item (0,0)
-			
 			const addedObjectsData = [];
 			const baseName = filename.replace(/\.glb$/i, '');
 			
@@ -183,21 +179,6 @@ export class ObjectManager {
 				for (let c = 0; c < cols; c++) {
 					if (r === 0 && c === 0) continue; // Skip the first one
 					
-					// Instantiate (lighter weight) or Clone
-					// InstantiateHierarchy is good for GLTF
-					const newRoot = root.instantiateHierarchy();
-					// Note: instantiateHierarchy creates a new root but shares geometry.
-					// We need to ensure metadata is set on the new root.
-					
-					// However, instantiateHierarchy returns a TransformNode usually, or the root mesh.
-					// Let's use simple cloning for safety with the existing logic
-					// const newRoot = root.clone(`${baseName}_r${r}_c${c}`);
-					// Cloning GLTF roots can be tricky in Babylon sometimes if not handled right,
-					// but ImportMeshAsync result usually works.
-					
-					// Let's use InstantiateHierarchy for performance if possible, but fallback to clone
-					// Actually, let's just use ImportMeshAsync in a loop? No, too slow.
-					// Clone is best.
 					const clone = root.clone();
 					setupMesh(clone, r, c);
 				}
@@ -749,6 +730,72 @@ export class ObjectManager {
 				if (objData) objData.isLocked = value;
 			});
 			this.saveToAutoSave();
+		}
+	}
+	
+	// Align Selected Objects
+	alignSelection(axis) {
+		if (this.selectedMeshes.length < 2) return;
+		
+		// 1. Calculate Average
+		let sum = 0;
+		this.selectedMeshes.forEach(m => {
+			sum += m.position[axis];
+		});
+		const avg = sum / this.selectedMeshes.length;
+		
+		// 2. Prepare Changes
+		const changes = [];
+		
+		this.selectedMeshes.forEach(mesh => {
+			const id = mesh.metadata.id;
+			
+			// Check if locked
+			const objData = this.placedObjects.find(o => o.id === id);
+			if (objData && objData.isLocked) return;
+			
+			// Skip if already aligned (float tolerance)
+			if (Math.abs(mesh.position[axis] - avg) < 0.001) return;
+			
+			const oldData = {
+				position: mesh.position.asArray(),
+				rotation: mesh.rotation.asArray(),
+				scaling: mesh.scaling.asArray()
+			};
+			
+			// Apply to Mesh
+			mesh.position[axis] = avg;
+			
+			const newData = {
+				position: mesh.position.asArray(),
+				rotation: mesh.rotation.asArray(),
+				scaling: mesh.scaling.asArray()
+			};
+			
+			// Update Internal Data
+			if (objData) {
+				objData.position = newData.position;
+			}
+			
+			changes.push({
+				id: id,
+				oldData: oldData,
+				newData: newData
+			});
+		});
+		
+		// 3. History & Notify
+		if (changes.length > 0) {
+			this.undoRedo.add({
+				type: 'TRANSFORM',
+				data: changes
+			});
+			
+			// Notify UI (Selection Change)
+			if (this.onSelectionChange) {
+				const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
+				this.onSelectionChange(selectedData);
+			}
 		}
 	}
 	
