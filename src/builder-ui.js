@@ -518,6 +518,22 @@ export class BuilderUI {
 			btnUndo.disabled = this.manager.undoRedo.historyIndex < 0;
 			btnRedo.disabled = this.manager.undoRedo.historyIndex >= this.manager.undoRedo.history.length - 1;
 		};
+		
+		// Keyboard Shortcuts for Undo (Ctrl+Z) and Redo (Ctrl+Y)
+		window.addEventListener('keydown', (e) => {
+			// Ignore if user is typing in an input field
+			if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+			
+			if (e.ctrlKey) {
+				if (e.key.toLowerCase() === 'z') {
+					e.preventDefault();
+					this.manager.undoRedo.undo();
+				} else if (e.key.toLowerCase() === 'y') {
+					e.preventDefault();
+					this.manager.undoRedo.redo();
+				}
+			}
+		});
 	}
 	
 	downloadJSON (data, filename) {
