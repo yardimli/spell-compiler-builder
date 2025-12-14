@@ -43,17 +43,21 @@ export class BuilderScene {
 		this.scene = new BABYLON.Scene(this.engine);
 		
 		// 3. Camera
-		this.camera = new BABYLON.ArcRotateCamera('EditorCamera', -Math.PI / 2, Math.PI / 3, 50, BABYLON.Vector3.Zero(), this.scene);
-		// Don't attach control immediately, wait for Key logic
+		this.camera = new BABYLON.ArcRotateCamera('EditorCamera', -Math.PI / 2, Math.PI / 3, 20, BABYLON.Vector3.Zero(), this.scene);
 		this.camera.wheelPrecision = 50;
-		this.camera.panningSensibility = 50;
 		this.camera.lowerRadiusLimit = 2;
 		this.camera.upperRadiusLimit = 200;
 		
 		// --- Camera Input Configuration ---
-		// We will toggle useCtrlForPanning dynamically in setupKeyboardControls
-		// Default to false so standard attachControl uses Left Click for Orbit
-		this.camera.useCtrlForPanning = false;
+		// Attach control immediately so scroll wheel works all the time
+		this.camera.attachControl(this.canvas, true);
+		
+		// 0 disables panning completely (Standard Input)
+		this.camera.panningSensibility = 0;
+		
+		// Infinity makes the camera infinitely hard to rotate (effectively locking it)
+		this.camera.angularSensibilityX = Infinity;
+		this.camera.angularSensibilityY = Infinity;
 		
 		// 4. Lights
 		const hemiLight = new BABYLON.HemisphericLight('hemiLight', new BABYLON.Vector3(0, 1, 0), this.scene);
@@ -204,49 +208,23 @@ export class BuilderScene {
 	}
 	
 	setupKeyboardControls () {
-		const updateCameraState = () => {
-			// Always detach first to ensure clean state
-			this.camera.detachControl();
-			
-			if (this.isCtrlDown) {
-				// Ctrl + Left Click = Pan
-				this.camera.useCtrlForPanning = true;
-				this.camera.attachControl(this.canvas, true);
-			} else if (this.isAltDown) {
-				// Alt + Left Click = Orbit
-				// We disable useCtrlForPanning, so Left Click maps to Orbit (default)
-				this.camera.useCtrlForPanning = false;
-				this.camera.attachControl(this.canvas, true);
-			}
-		};
-		
+		// Track key states for manual interaction
 		window.addEventListener('keydown', (e) => {
 			if (e.key === 'Control') {
-				if (!this.isCtrlDown) {
-					this.isCtrlDown = true;
-					updateCameraState();
-				}
+				this.isCtrlDown = true;
 			} else if (e.key === 'Alt') {
-				if (!this.isAltDown) {
-					this.isAltDown = true;
-					e.preventDefault(); // Prevent browser menu focus
-					updateCameraState();
-				}
+				this.isAltDown = true;
+				e.preventDefault(); // Prevent browser menu focus
 			}
 		});
 		
 		window.addEventListener('keyup', (e) => {
 			if (e.key === 'Control') {
 				this.isCtrlDown = false;
-				updateCameraState();
 			} else if (e.key === 'Alt') {
 				this.isAltDown = false;
-				updateCameraState();
 			}
 		});
-		
-		// Ensure camera is detached initially
-		this.camera.detachControl();
 	}
 	
 	setupInteraction () {
@@ -334,6 +312,29 @@ export class BuilderScene {
 	}
 	
 	handlePointerMove (info) {
+		// 1. Manual Camera Control (No Click)
+		if (this.isCtrlDown || this.isAltDown) {
+			const evt = info.event;
+			// Use movementX/Y for delta
+			const dx = evt.movementX || evt.mozMovementX || evt.webkitMovementX || 0;
+			const dy = evt.movementY || evt.mozMovementY || evt.webkitMovementY || 0;
+			
+			// Sensitivity for manual movement
+			const sensitivity = 1000;
+			
+			if (this.isAltDown) {
+				// Orbit (Alt + Move)
+				this.camera.inertialAlphaOffset -= dx / sensitivity;
+				this.camera.inertialBetaOffset -= dy / sensitivity;
+			} else if (this.isCtrlDown) {
+				// Pan (Ctrl + Move)
+				this.camera.inertialPanningX -= dx / sensitivity;
+				this.camera.inertialPanningY += dy / sensitivity;
+			}
+			return;
+		}
+		
+		// 2. Object Dragging
 		if (this.isDragging && this.draggedMesh) {
 			const groundPick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m) => m === this.groundMesh);
 			if (groundPick.hit) {
