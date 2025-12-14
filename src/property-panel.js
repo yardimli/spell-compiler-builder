@@ -130,6 +130,9 @@ export class PropertyPanel {
 			this.inputs.tint.onchange = (e) => {
 				if (this.currentObjectId) {
 					this.objectManager.updateObjectProperty(this.currentObjectId, 'color', e.target.value);
+				} else {
+					// Multi-object color update
+					this.objectManager.updateMultipleObjectsProperty('color', e.target.value);
 				}
 			};
 		}
@@ -177,7 +180,7 @@ export class PropertyPanel {
 	}
 	
 	emitTransformChange (type) {
-		if (this.isUpdatingUI || !this.currentObjectId) return;
+		if (this.isUpdatingUI) return;
 		
 		const values = {
 			x: parseFloat(this.inputs[type === 'position' ? 'pos' : (type === 'rotation' ? 'rot' : 'scale')].x.value) || 0,
@@ -192,7 +195,13 @@ export class PropertyPanel {
 			if (values.z === 0) values.z = 0.001;
 		}
 		
-		this.objectManager.updateObjectProperty(this.currentObjectId, type, values);
+		if (this.currentObjectId) {
+			// Single Object
+			this.objectManager.updateObjectProperty(this.currentObjectId, type, values);
+		} else {
+			// Multi Object - Move the group (Proxy)
+			this.objectManager.updateGroupTransform(type, values);
+		}
 	}
 	
 	updateUI (dataArray) {
@@ -266,6 +275,32 @@ export class PropertyPanel {
 				} else {
 					this.inputs.lock.indeterminate = true;
 				}
+			}
+			
+			// Determine Color (Use first, or white if mixed? Just use first for now)
+			if (this.inputs.tint) {
+				this.inputs.tint.value = dataArray[0].color || '#ffffff';
+			}
+			
+			// Determine Transforms (Use Proxy Transform)
+			if (this.objectManager.selectionProxy) {
+				const proxy = this.objectManager.selectionProxy;
+				
+				// Position
+				if (this.inputs.pos.x) this.inputs.pos.x.value = proxy.position.x.toFixed(2);
+				if (this.inputs.pos.y) this.inputs.pos.y.value = proxy.position.y.toFixed(2);
+				if (this.inputs.pos.z) this.inputs.pos.z.value = proxy.position.z.toFixed(2);
+				
+				// Rotation (Proxy uses Quaternion, convert to Euler)
+				const euler = proxy.rotationQuaternion ? proxy.rotationQuaternion.toEulerAngles() : proxy.rotation;
+				if (this.inputs.rot.x) this.inputs.rot.x.value = BABYLON.Tools.ToDegrees(euler.x).toFixed(1);
+				if (this.inputs.rot.y) this.inputs.rot.y.value = BABYLON.Tools.ToDegrees(euler.y).toFixed(1);
+				if (this.inputs.rot.z) this.inputs.rot.z.value = BABYLON.Tools.ToDegrees(euler.z).toFixed(1);
+				
+				// Scale
+				if (this.inputs.scale.x) this.inputs.scale.x.value = proxy.scaling.x.toFixed(2);
+				if (this.inputs.scale.y) this.inputs.scale.y.value = proxy.scaling.y.toFixed(2);
+				if (this.inputs.scale.z) this.inputs.scale.z.value = proxy.scaling.z.toFixed(2);
 			}
 			
 			// Populate List

@@ -160,6 +160,12 @@
 		.prop-row { display: flex; gap: 5px; margin-bottom: 5px; align-items: center; }
 		.prop-row span { width: 15px; text-align: center; color: #95a5a6; }
 		
+		/* NEW: Side-by-side inputs style */
+		.prop-row.compact { display: flex; gap: 4px; }
+		.input-col { display: flex; flex-direction: column; align-items: center; flex: 1; }
+		.input-col span { font-size: 10px; margin-bottom: 2px; width: 100%; }
+		.input-col input { text-align: center; padding: 4px 2px; }
+		
 		/* Multi-select List Styles */
 		#multi-select-container {
 			max-height: 200px;
@@ -332,13 +338,8 @@
 			</div>
 		</div>
 		
-		<!-- Single Object View -->
-		<div id="single-obj-props">
-			<div class="prop-group">
-				<label>Name</label>
-				<input type="text" id="propName">
-			</div>
-			
+		<!-- Shared Properties (Color & Transforms) -->
+		<div id="shared-props">
 			<div class="prop-group">
 				<label>Tint Color</label>
 				<input type="color" id="propTint" value="#ffffff">
@@ -346,23 +347,37 @@
 			
 			<div class="prop-group">
 				<label>Position</label>
-				<div class="prop-row"><span>X</span><input type="number" id="posX" step="0.1"></div>
-				<div class="prop-row"><span>Y</span><input type="number" id="posY" step="0.1"></div>
-				<div class="prop-row"><span>Z</span><input type="number" id="posZ" step="0.1"></div>
+				<div class="prop-row compact">
+					<div class="input-col"><span>X</span><input type="number" id="posX" step="0.1"></div>
+					<div class="input-col"><span>Y</span><input type="number" id="posY" step="0.1"></div>
+					<div class="input-col"><span>Z</span><input type="number" id="posZ" step="0.1"></div>
+				</div>
 			</div>
 			
 			<div class="prop-group">
 				<label>Rotation (Degrees)</label>
-				<div class="prop-row"><span>X</span><input type="number" id="rotX" step="15"></div>
-				<div class="prop-row"><span>Y</span><input type="number" id="rotY" step="15"></div>
-				<div class="prop-row"><span>Z</span><input type="number" id="rotZ" step="15"></div>
+				<div class="prop-row compact">
+					<div class="input-col"><span>X</span><input type="number" id="rotX" step="15"></div>
+					<div class="input-col"><span>Y</span><input type="number" id="rotY" step="15"></div>
+					<div class="input-col"><span>Z</span><input type="number" id="rotZ" step="15"></div>
+				</div>
 			</div>
 			
 			<div class="prop-group">
 				<label>Scale</label>
-				<div class="prop-row"><span>X</span><input type="number" id="scaleX" step="0.1"></div>
-				<div class="prop-row"><span>Y</span><input type="number" id="scaleY" step="0.1"></div>
-				<div class="prop-row"><span>Z</span><input type="number" id="scaleZ" step="0.1"></div>
+				<div class="prop-row compact">
+					<div class="input-col"><span>X</span><input type="number" id="scaleX" step="0.1"></div>
+					<div class="input-col"><span>Y</span><input type="number" id="scaleY" step="0.1"></div>
+					<div class="input-col"><span>Z</span><input type="number" id="scaleZ" step="0.1"></div>
+				</div>
+			</div>
+		</div>
+		
+		<!-- Single Object Specifics -->
+		<div id="single-obj-props">
+			<div class="prop-group">
+				<label>Name</label>
+				<input type="text" id="propName">
 			</div>
 		</div>
 		
