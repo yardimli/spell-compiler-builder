@@ -358,6 +358,14 @@ export class BuilderUI {
 	setupContextMenu () {
 		const menu = document.getElementById('context-menu');
 		const gridItem = document.getElementById('ctx-add-grid');
+		
+		// Grid Modal Elements
+		const gridModal = document.getElementById('gridModal');
+		const btnCreateGrid = document.getElementById('btnCreateGrid');
+		const btnCancelGrid = document.getElementById('btnCancelGrid');
+		const inRows = document.getElementById('gridRows');
+		const inCols = document.getElementById('gridCols');
+		
 		let targetFile = null;
 		
 		// Attach event listener to sidebar (delegate)
@@ -376,23 +384,45 @@ export class BuilderUI {
 		});
 		
 		// Hide menu on click elsewhere
-		window.addEventListener('click', () => {
+		window.addEventListener('click', (e) => {
+			// Don't hide if clicking inside the modal
+			if (e.target.closest('.modal-content')) return;
 			menu.style.display = 'none';
 		});
 		
-		// Menu Item Action
+		// Menu Item Action: Open Modal
 		gridItem.onclick = () => {
 			if (targetFile) {
-				const rows = prompt("Enter number of rows:", "3");
-				const cols = prompt("Enter number of columns:", "3");
-				
-				const r = parseInt(rows);
-				const c = parseInt(cols);
-				
-				if (!isNaN(r) && !isNaN(c) && r > 0 && c > 0) {
-					this.manager.addAssetGrid(targetFile, this.scene.selectedCellPosition, r, c);
-				}
+				menu.style.display = 'none';
+				gridModal.style.display = 'flex';
+				// Reset inputs to default
+				inRows.value = 3;
+				inCols.value = 3;
 			}
+		};
+		
+		// Modal Actions
+		const closeGridModal = () => {
+			gridModal.style.display = 'none';
+		};
+		
+		btnCancelGrid.onclick = closeGridModal;
+		
+		btnCreateGrid.onclick = () => {
+			const r = parseInt(inRows.value);
+			const c = parseInt(inCols.value);
+			
+			if (!isNaN(r) && !isNaN(c) && r > 0 && c > 0 && targetFile) {
+				this.manager.addAssetGrid(targetFile, this.scene.selectedCellPosition, r, c);
+				closeGridModal();
+			} else {
+				alert("Please enter valid positive numbers for rows and columns.");
+			}
+		};
+		
+		// Close grid modal on outside click
+		gridModal.onclick = (event) => {
+			if (event.target === gridModal) closeGridModal();
 		};
 	}
 	
