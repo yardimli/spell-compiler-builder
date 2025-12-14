@@ -14,24 +14,158 @@ export class ObjectManager {
 		this.selectedMeshes = []; // Array of currently selected Babylon Meshes
 		
 		// Settings (Defaults as requested: Grid Snap OFF, Object Snap ON)
-		this.snapToGrid = false;
-		this.snapToObjects = true;
-		this.gridSize = 2.5;
+		this._snapToGrid = false;
+		this._snapToObjects = true;
+		this._gridSize = 2.5;
 		this.defaultYOffset = 0; // New setting for Y offset
 		this.autoSaveEnabled = true;
 		
 		// Initialize Undo/Redo Manager
 		this.undoRedo = new UndoRedoManager(this);
 		
-		// Hook into history change (Removed auto-save call from here)
-		// The UI now handles auto-save via timer
-		
 		// Events
 		this.onSelectionChange = null; // Callback for UI
 		
-		// Drag State
-		this.dragStartData = null; // Stores initial state of all selected objects
-		this.dragStartOffsets = new Map(); // Stores offset of each mesh relative to the drag anchor
+		// Gizmo Manager
+		this.gizmoManager = new BABYLON.GizmoManager(this.scene);
+		this.setupGizmo();
+		
+		// Drag State for Gizmo Multi-Select
+		this.dragStartData = null;
+		this.lastAttachedMeshPosition = null;
+	}
+	
+	// --- Getters/Setters to sync Gizmo settings ---
+	get snapToGrid() { return this._snapToGrid; }
+	set snapToGrid(val) {
+		this._snapToGrid = val;
+		this.updateGizmoSettings();
+	}
+	
+	get gridSize() { return this._gridSize; }
+	set gridSize(val) {
+		this._gridSize = val;
+		this.updateGizmoSettings();
+	}
+	
+	// --- Gizmo Setup ---
+	setupGizmo() {
+		// Enable only Position Gizmo (Arrows)
+		this.gizmoManager.positionGizmoEnabled = true;
+		this.gizmoManager.rotationGizmoEnabled = false;
+		this.gizmoManager.scaleGizmoEnabled = false;
+		this.gizmoManager.boundingBoxGizmoEnabled = false;
+		
+		// Don't attach automatically on pointer events, we control attachment via selection
+		this.gizmoManager.usePointerToAttachGizmos = false;
+		this.gizmoManager.clearGizmoOnEmptyPointerEvent = true;
+		
+		// Configure Visuals
+		// (Optional: customize colors if needed, defaults are RGB)
+		
+		// --- Undo/Redo & Multi-Select Logic ---
+		const gizmo = this.gizmoManager.gizmos.positionGizmo;
+		if (gizmo) {
+			// 1. Drag Start: Record state
+			gizmo.onDragStartObservable.add(() => {
+				if (this.selectedMeshes.length === 0) return;
+				
+				// Snapshot for Undo
+				this.dragStartData = this.selectedMeshes.map(mesh => ({
+					id: mesh.metadata.id,
+					position: mesh.position.asArray(),
+					rotation: mesh.rotation.asArray(),
+					scaling: mesh.scaling.asArray()
+				}));
+				
+				// Track position for delta calculation
+				if (this.gizmoManager.attachedMesh) {
+					this.lastAttachedMeshPosition = this.gizmoManager.attachedMesh.position.clone();
+				}
+			});
+			
+			// 2. Dragging: Apply delta to other selected meshes
+			gizmo.onDragObservable.add(() => {
+				const attached = this.gizmoManager.attachedMesh;
+				if (!attached || !this.lastAttachedMeshPosition) return;
+				
+				// Calculate how much the gizmo moved the attached mesh
+				const currentPos = attached.position;
+				const delta = currentPos.subtract(this.lastAttachedMeshPosition);
+				
+				// Apply this delta to all OTHER selected meshes
+				this.selectedMeshes.forEach(mesh => {
+					if (mesh !== attached) {
+						mesh.position.addInPlace(delta);
+					}
+				});
+				
+				// Update tracker
+				this.lastAttachedMeshPosition = currentPos.clone();
+				
+				// Live UI Update (Optional, for single selection)
+				if (this.selectedMeshes.length === 1 && this.onSelectionChange) {
+					const data = this.placedObjects.find(o => o.id === attached.metadata.id);
+					if (data) {
+						data.position = attached.position.asArray();
+						this.onSelectionChange([data]);
+					}
+				}
+			});
+			
+			// 3. Drag End: Commit to history
+			gizmo.onDragEndObservable.add(() => {
+				if (!this.dragStartData) return;
+				
+				const changes = [];
+				
+				this.selectedMeshes.forEach(mesh => {
+					const id = mesh.metadata.id;
+					const startData = this.dragStartData.find(d => d.id === id);
+					
+					if (!startData) return;
+					
+					const currentData = {
+						position: mesh.position.asArray(),
+						rotation: mesh.rotation.asArray(),
+						scaling: mesh.scaling.asArray()
+					};
+					
+					// Check if changed
+					if (JSON.stringify(currentData.position) !== JSON.stringify(startData.position)) {
+						// Update internal data model
+						const objIndex = this.placedObjects.findIndex(o => o.id === id);
+						if (objIndex !== -1) {
+							this.placedObjects[objIndex].position = currentData.position;
+						}
+						
+						changes.push({
+							id: id,
+							oldData: startData,
+							newData: currentData
+						});
+					}
+				});
+				
+				if (changes.length > 0) {
+					this.undoRedo.add({
+						type: 'TRANSFORM',
+						data: changes
+					});
+				}
+				
+				this.dragStartData = null;
+				this.lastAttachedMeshPosition = null;
+			});
+		}
+		
+		this.updateGizmoSettings();
+	}
+	
+	updateGizmoSettings() {
+		if (this.gizmoManager.gizmos.positionGizmo) {
+			this.gizmoManager.gizmos.positionGizmo.snapDistance = this._snapToGrid ? this._gridSize : 0;
+		}
 	}
 	
 	// --- Object Management ---
@@ -357,6 +491,10 @@ export class ObjectManager {
 			// 3. Select new objects
 			this.selectedMeshes = newMeshes;
 			this.selectedMeshes.forEach(m => this.setSelectionHighlight(m, true));
+			// Update Gizmo to new selection
+			if (this.selectedMeshes.length > 0) {
+				this.gizmoManager.attachToMesh(this.selectedMeshes[this.selectedMeshes.length - 1]);
+			}
 			
 			// 4. Notify UI
 			if (this.onSelectionChange) {
@@ -377,10 +515,13 @@ export class ObjectManager {
 				this.selectedMeshes = this.selectedMeshes.filter(m => m !== mesh);
 				if (this.selectedMeshes.length === 0) {
 					this.onSelectionChange(null);
+					this.gizmoManager.attachToMesh(null);
 				} else {
 					// Update UI with remaining selection
 					const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
 					this.onSelectionChange(selectedData);
+					// Reattach gizmo to remaining
+					this.gizmoManager.attachToMesh(this.selectedMeshes[this.selectedMeshes.length - 1]);
 				}
 			}
 			mesh.dispose();
@@ -459,6 +600,23 @@ export class ObjectManager {
 			}
 		}
 		
+		// --- GIZMO ATTACHMENT ---
+		if (this.selectedMeshes.length > 0) {
+			// Attach gizmo to the last selected mesh (most recent)
+			// For multi-select, we track this mesh's movement and apply delta to others
+			const primaryMesh = this.selectedMeshes[this.selectedMeshes.length - 1];
+			
+			// Check if locked
+			const objData = this.placedObjects.find(o => o.id === primaryMesh.metadata.id);
+			if (objData && objData.isLocked) {
+				this.gizmoManager.attachToMesh(null);
+			} else {
+				this.gizmoManager.attachToMesh(primaryMesh);
+			}
+		} else {
+			this.gizmoManager.attachToMesh(null);
+		}
+		
 		// Update UI
 		if (this.onSelectionChange) {
 			if (this.selectedMeshes.length > 0) {
@@ -485,205 +643,8 @@ export class ObjectManager {
 	}
 	
 	// --- Transformation & Snapping ---
-	
-	startDrag (clickedMesh, groundPoint) {
-		if (!clickedMesh || this.selectedMeshes.length === 0) return;
-		
-		this.dragStartData = [];
-		this.dragStartOffsets.clear();
-		
-		// Store initial state for all selected objects
-		this.selectedMeshes.forEach(mesh => {
-			this.dragStartData.push({
-				id: mesh.metadata.id,
-				position: mesh.position.asArray(),
-				rotation: mesh.rotation.asArray(),
-				scaling: mesh.scaling.asArray()
-			});
-			
-			// Calculate offset from the ground click point to the mesh position
-			// This allows moving the group relative to the cursor
-			const offset = mesh.position.subtract(groundPoint);
-			// Keep Y relative to mesh, but X/Z relative to ground point
-			offset.y = mesh.position.y;
-			this.dragStartOffsets.set(mesh.metadata.id, offset);
-		});
-	}
-	
-	handleDrag (clickedMesh, groundPoint) {
-		// Calculate the "target" position for the clicked mesh based on the cursor
-		// But we apply logic to all meshes
-		
-		// We need to determine the translation delta or absolute position for the group.
-		// Strategy: Calculate where the *clicked* mesh should be (snapped),
-		// then apply the difference to all others?
-		// Or calculate individual positions based on the cursor + offset?
-		
-		// Let's use individual positions based on cursor + offset.
-		// However, snapping needs to happen. Usually, we snap the "primary" object (clickedMesh)
-		// and move others relative to it to maintain formation.
-		
-		const primaryOffset = this.dragStartOffsets.get(clickedMesh.metadata.id);
-		if (!primaryOffset) return;
-		
-		// 1. Calculate Proposed Position for Primary Mesh
-		let proposedPrimaryPos = groundPoint.add(new BABYLON.Vector3(primaryOffset.x, 0, primaryOffset.z));
-		proposedPrimaryPos.y = primaryOffset.y; // Keep original Y
-		
-		// 2. Apply Grid Snapping to Primary
-		if (this.snapToGrid) {
-			proposedPrimaryPos.x = Math.round(proposedPrimaryPos.x / this.gridSize) * this.gridSize;
-			proposedPrimaryPos.z = Math.round(proposedPrimaryPos.z / this.gridSize) * this.gridSize;
-		}
-		
-		// 3. Apply Object Snapping to Primary
-		if (this.snapToObjects) {
-			const snapped = this.calculateObjectSnap(clickedMesh, proposedPrimaryPos);
-			if (snapped) {
-				proposedPrimaryPos = snapped;
-			}
-		}
-		
-		// 4. Calculate Delta (Movement vector)
-		const currentPrimaryPos = clickedMesh.position;
-		const delta = proposedPrimaryPos.subtract(currentPrimaryPos);
-		
-		// 5. Apply Delta to ALL selected meshes
-		this.selectedMeshes.forEach(mesh => {
-			mesh.position.addInPlace(delta);
-		});
-		
-		// Update UI live (only if single selected, or maybe show primary coords)
-		if (this.onSelectionChange && this.selectedMeshes.length === 1) {
-			const data = this.placedObjects.find(o => o.id === clickedMesh.metadata.id);
-			if (data) {
-				data.position = clickedMesh.position.asArray();
-				this.onSelectionChange([data]);
-			}
-		}
-	}
-	
-	endDrag (clickedMesh) {
-		if (!this.dragStartData) return;
-		
-		const changes = [];
-		
-		this.selectedMeshes.forEach(mesh => {
-			const id = mesh.metadata.id;
-			const startData = this.dragStartData.find(d => d.id === id);
-			
-			if (!startData) return;
-			
-			const currentData = {
-				position: mesh.position.asArray(),
-				rotation: mesh.rotation.asArray(),
-				scaling: mesh.scaling.asArray()
-			};
-			
-			// Check if changed
-			if (JSON.stringify(currentData.position) !== JSON.stringify(startData.position)) { // Only pos changes in drag
-				// Update internal data model
-				const objIndex = this.placedObjects.findIndex(o => o.id === id);
-				if (objIndex !== -1) {
-					this.placedObjects[objIndex].position = currentData.position;
-				}
-				
-				changes.push({
-					id: id,
-					oldData: startData,
-					newData: currentData
-				});
-			}
-		});
-		
-		if (changes.length > 0) {
-			this.undoRedo.add({
-				type: 'TRANSFORM',
-				data: changes // Array of changes
-			});
-		}
-		
-		this.dragStartData = null;
-		this.dragStartOffsets.clear();
-	}
-	
-	calculateObjectSnap (mesh, proposedPos) {
-		// Get World Bounds of dragging mesh at proposed position
-		const originalPos = mesh.position.clone();
-		mesh.position = proposedPos;
-		mesh.computeWorldMatrix(true);
-		const bounds = mesh.getHierarchyBoundingVectors();
-		mesh.position = originalPos; // Restore
-		
-		const min = bounds.min;
-		const max = bounds.max;
-		
-		// Define corners (Bottom plane)
-		const corners = [
-			new BABYLON.Vector3(min.x, 0, min.z),
-			new BABYLON.Vector3(max.x, 0, min.z),
-			new BABYLON.Vector3(max.x, 0, max.z),
-			new BABYLON.Vector3(min.x, 0, max.z)
-		];
-		
-		let closestDist = Number.MAX_VALUE;
-		let snapOffset = null;
-		const snapThreshold = 2.0; // Distance to activate snap
-		
-		// Iterate all other objects (excluding ALL selected objects)
-		this.scene.meshes.forEach(other => {
-			if (other === mesh || !other.metadata || !other.metadata.isObject || other.parent) return;
-			// Skip if other is also selected
-			if (this.selectedMeshes.includes(other)) return;
-			
-			const otherBounds = other.getHierarchyBoundingVectors();
-			const otherCorners = [
-				new BABYLON.Vector3(otherBounds.min.x, 0, otherBounds.min.z),
-				new BABYLON.Vector3(otherBounds.max.x, 0, otherBounds.min.z),
-				new BABYLON.Vector3(otherBounds.max.x, 0, otherBounds.max.z),
-				new BABYLON.Vector3(otherBounds.min.x, 0, otherBounds.max.z)
-			];
-			
-			// Check every corner against every other corner
-			for (const c1 of corners) {
-				for (const c2 of otherCorners) {
-					const dist = BABYLON.Vector3.Distance(c1, c2);
-					if (dist < snapThreshold && dist < closestDist) {
-						closestDist = dist;
-						// Calculate the offset needed to align c1 to c2
-						snapOffset = c2.subtract(c1);
-					}
-				}
-			}
-		});
-		
-		if (snapOffset) {
-			const snappedPos = proposedPos.add(snapOffset);
-			
-			// Check for overlap
-			mesh.position = snappedPos;
-			mesh.computeWorldMatrix(true);
-			
-			let overlaps = false;
-			for (const other of this.scene.meshes) {
-				if (other === mesh || !other.metadata || !other.metadata.isObject || other.parent) continue;
-				if (this.selectedMeshes.includes(other)) continue; // Ignore self-intersection within selection group
-				
-				if (mesh.intersectsMesh(other, true)) {
-					overlaps = true;
-					break;
-				}
-			}
-			
-			mesh.position = originalPos; // Restore
-			
-			if (!overlaps) {
-				return snappedPos;
-			}
-		}
-		
-		return null;
-	}
+	// Previous drag methods (startDrag, handleDrag, endDrag) removed/deprecated
+	// as functionality is now handled by the GizmoManager events in constructor.
 	
 	// Direct update from Property Panel (Single Object only for now)
 	updateObjectProperty (id, prop, value) {
@@ -695,6 +656,13 @@ export class ObjectManager {
 		// Handle Locking
 		if (prop === 'isLocked') {
 			objData.isLocked = value;
+			// If we just locked the currently selected object (and it's the one with gizmo), detach gizmo
+			if (value && this.gizmoManager.attachedMesh === mesh) {
+				this.gizmoManager.attachToMesh(null);
+			} else if (!value && this.selectedMeshes.includes(mesh) && !this.gizmoManager.attachedMesh) {
+				// If unlocked and selected, reattach
+				this.gizmoManager.attachToMesh(mesh);
+			}
 			return;
 		}
 		
@@ -758,6 +726,12 @@ export class ObjectManager {
 				const objData = this.placedObjects.find(o => o.id === mesh.metadata.id);
 				if (objData) objData.isLocked = value;
 			});
+			// Update Gizmo visibility based on lock status
+			if (value) {
+				this.gizmoManager.attachToMesh(null);
+			} else if (this.selectedMeshes.length > 0) {
+				this.gizmoManager.attachToMesh(this.selectedMeshes[this.selectedMeshes.length - 1]);
+			}
 		}
 	}
 	

@@ -17,9 +17,7 @@ export class BuilderScene {
 		
 		// Interaction State
 		this.selectedCellPosition = new BABYLON.Vector3(0, 0, 0);
-		this.isDragging = false;
-		this.draggedMesh = null;
-		this.dragOffset = new BABYLON.Vector3(0, 0, 0);
+		// Dragging state removed as we now use Gizmos
 		
 		// Visual Settings Defaults
 		this.gridColor = '#555555';
@@ -116,12 +114,17 @@ export class BuilderScene {
 			cameraTarget: this.camera.target.clone(),
 			gridEnabled: this.groundMesh.isEnabled(),
 			cursorEnabled: this.cursorMesh.isEnabled(),
-			clearColor: this.scene.clearColor.clone()
+			clearColor: this.scene.clearColor.clone(),
+			// Disable Gizmos during thumbnail generation
+			gizmosEnabled: this.objectManager.gizmoManager.positionGizmoEnabled
 		};
 		
 		// Hide Grid and Cursor
 		this.groundMesh.setEnabled(false);
 		this.cursorMesh.setEnabled(false);
+		
+		// Hide Gizmos
+		this.objectManager.gizmoManager.positionGizmoEnabled = false;
 		
 		// Hide all placed objects
 		this.objectManager.placedObjects.forEach(obj => {
@@ -146,6 +149,9 @@ export class BuilderScene {
 		this.groundMesh.setEnabled(this.savedState.gridEnabled);
 		this.cursorMesh.setEnabled(this.savedState.cursorEnabled);
 		this.scene.clearColor = this.savedState.clearColor;
+		
+		// Restore Gizmos
+		this.objectManager.gizmoManager.positionGizmoEnabled = this.savedState.gizmosEnabled;
 		
 		// Restore objects
 		this.objectManager.placedObjects.forEach(obj => {
@@ -341,7 +347,7 @@ export class BuilderScene {
 	}
 	
 	handlePointerDown (info) {
-		// If manipulating camera, do not select/drag objects
+		// If manipulating camera, do not select objects
 		if (this.isCtrlDown || this.isAltDown) return;
 		
 		const pick = info.pickInfo;
@@ -366,41 +372,8 @@ export class BuilderScene {
 			}
 			
 			if (mesh && mesh.metadata && mesh.metadata.isObject) {
-				// Logic: Check if object is already in selection
-				const isAlreadySelected = this.objectManager.selectedMeshes.includes(mesh);
-				
-				// CHECK LOCKED STATUS
-				const objData = this.objectManager.placedObjects.find(o => o.id === mesh.metadata.id);
-				const isLocked = objData && objData.isLocked;
-				
-				if (isAlreadySelected && !isMultiSelect) {
-					// If already selected and no shift, we might be starting a drag
-					// Only start drag if NOT locked
-					if (!isLocked) {
-						this.draggedMesh = mesh;
-						this.isDragging = true;
-						
-						// Calculate Offset
-						const groundPick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m) => m === this.groundMesh);
-						if (groundPick.hit) {
-							// Pass the ground point to startDrag to calculate offsets for ALL selected meshes
-							this.objectManager.startDrag(mesh, groundPick.pickedPoint);
-						}
-					}
-				} else {
-					// Select logic (handles toggle for multi-select inside manager)
-					this.objectManager.selectObject(mesh, isMultiSelect);
-					
-					// If we just selected it, we can also start dragging immediately (if not locked)
-					if (this.objectManager.selectedMeshes.includes(mesh) && !isLocked) {
-						this.draggedMesh = mesh;
-						this.isDragging = true;
-						const groundPick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m) => m === this.groundMesh);
-						if (groundPick.hit) {
-							this.objectManager.startDrag(mesh, groundPick.pickedPoint);
-						}
-					}
-				}
+				// Select logic (handles toggle for multi-select inside manager)
+				this.objectManager.selectObject(mesh, isMultiSelect);
 			}
 		}
 	}
@@ -428,22 +401,11 @@ export class BuilderScene {
 			return;
 		}
 		
-		// 2. Object Dragging
-		if (this.isDragging && this.draggedMesh) {
-			const groundPick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m) => m === this.groundMesh);
-			if (groundPick.hit) {
-				// Pass the ground point. The manager calculates the new position based on offsets.
-				this.objectManager.handleDrag(this.draggedMesh, groundPick.pickedPoint);
-			}
-		}
+		// Dragging logic removed; handled by GizmoManager in ObjectManager
 	}
 	
 	handlePointerUp (info) {
-		if (this.isDragging) {
-			this.objectManager.endDrag(this.draggedMesh);
-			this.isDragging = false;
-			this.draggedMesh = null;
-		}
+		// Drag end logic removed; handled by GizmoManager
 	}
 	
 	handleDoubleClick (info) {
