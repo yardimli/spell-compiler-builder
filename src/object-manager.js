@@ -418,7 +418,7 @@ export class ObjectManager {
 		this.selectedMeshes.forEach(m => this.setSelectionHighlight(m, false));
 		
 		// 2. Clone Loop
-		const promises = this.selectedMeshes.map(async (originalMesh) => {
+		this.selectedMeshes.forEach(originalMesh => {
 			const originalData = this.placedObjects.find(o => o.id === originalMesh.metadata.id);
 			if (!originalData) return;
 			
@@ -427,8 +427,9 @@ export class ObjectManager {
 			const baseName = originalData.name.split('_')[0];
 			const newName = `${baseName}_copy_${Math.floor(Math.random() * 1000)}`;
 			
-			// Offset position slightly
-			const newPos = originalMesh.position.clone().add(new BABYLON.Vector3(2, 0, 2));
+			// Offset position slightly (Closer to original: 0.5 units)
+			const offset = new BABYLON.Vector3(0.5, 0, 0.5);
+			const newPos = originalMesh.position.clone().add(offset);
 			
 			let newRoot;
 			
@@ -445,29 +446,30 @@ export class ObjectManager {
 				sphere.isPickable = true;
 				newRoot = light;
 			} else {
-				// Clone Mesh
-				// Using ImportMeshAsync again ensures a clean separate instance
-				const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_FOLDER, originalData.file, this.scene);
-				newRoot = result.meshes[0];
+				// Clone Mesh using instantiateHierarchy with doNotInstantiate: true
+				// This performs a deep clone of the hierarchy, preserving all visual properties
+				// (scale, rotation, materials, textures) exactly as they appear in the scene.
+				newRoot = originalMesh.instantiateHierarchy(null, { doNotInstantiate: true });
 				newRoot.name = newName;
 				newRoot.position = newPos;
-				newRoot.rotation = originalMesh.rotation.clone();
-				if (originalMesh.rotationQuaternion) newRoot.rotationQuaternion = originalMesh.rotationQuaternion.clone();
-				newRoot.scaling = originalMesh.scaling.clone();
+				// Rotation and Scaling are automatically copied by instantiateHierarchy
 				
 				newRoot.metadata = { id: newId, isObject: true, file: originalData.file };
 				
-				result.meshes.forEach(m => {
+				// Ensure shadows/pickable are set for all children
+				const descendants = newRoot.getChildMeshes(false);
+				if (newRoot instanceof BABYLON.Mesh) descendants.push(newRoot);
+				
+				descendants.forEach(m => {
 					this.shadowGenerator.addShadowCaster(m, true);
 					m.receiveShadows = true;
 					m.isPickable = true;
-					if (m !== newRoot) m.parent = newRoot;
+					
+					// If the material was tinted (shared from original), clone it to ensure independence
+					if (m.material && m.material.name.includes('_tinted')) {
+						m.material = m.material.clone(m.material.name + '_' + newId);
+					}
 				});
-				
-				// Apply color if exists
-				if (originalData.color) {
-					this.applyColorToMesh(newRoot, originalData.color);
-				}
 			}
 			
 			const newData = {
@@ -487,24 +489,22 @@ export class ObjectManager {
 			newMeshes.push(newRoot);
 		});
 		
-		Promise.all(promises).then(() => {
-			// 3. Select new objects
-			this.selectedMeshes = newMeshes;
-			this.selectedMeshes.forEach(m => this.setSelectionHighlight(m, true));
-			// Update Gizmo to new selection
-			if (this.selectedMeshes.length > 0) {
-				this.gizmoManager.attachToMesh(this.selectedMeshes[this.selectedMeshes.length - 1]);
-			}
-			
-			// 4. Notify UI
-			if (this.onSelectionChange) {
-				const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
-				this.onSelectionChange(selectedData);
-			}
-			
-			// 5. History
-			this.undoRedo.add({ type: 'ADD', data: newObjectsData });
-		});
+		// 3. Select new objects
+		this.selectedMeshes = newMeshes;
+		this.selectedMeshes.forEach(m => this.setSelectionHighlight(m, true));
+		// Update Gizmo to new selection
+		if (this.selectedMeshes.length > 0) {
+			this.gizmoManager.attachToMesh(this.selectedMeshes[this.selectedMeshes.length - 1]);
+		}
+		
+		// 4. Notify UI
+		if (this.onSelectionChange) {
+			const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
+			this.onSelectionChange(selectedData);
+		}
+		
+		// 5. History
+		this.undoRedo.add({ type: 'ADD', data: newObjectsData });
 	}
 	
 	removeObjectById (id, clearSelection = true) {
