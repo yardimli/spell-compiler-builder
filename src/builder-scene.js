@@ -62,14 +62,20 @@ export class BuilderScene {
 		
 		// 4. Lights
 		const hemiLight = new BABYLON.HemisphericLight('hemiLight', new BABYLON.Vector3(0, 1, 0), this.scene);
-		hemiLight.intensity = 0.7;
+		hemiLight.intensity = 0.6; // Slightly reduced ambient to make shadows pop more
 		
 		const dirLight = new BABYLON.DirectionalLight('dirLight', new BABYLON.Vector3(-1, -2, -1), this.scene);
 		dirLight.position = new BABYLON.Vector3(20, 40, 20);
-		dirLight.intensity = 0.8;
+		dirLight.intensity = 1.0;
 		
+		// Shadow Configuration
 		this.shadowGenerator = new BABYLON.ShadowGenerator(2048, dirLight);
-		this.shadowGenerator.useBlurExponentialShadowMap = true;
+		// Use PCF for softer shadows if available, otherwise BlurExponential
+		this.shadowGenerator.usePercentageCloserFiltering = true;
+		this.shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_HIGH;
+		// Ensure objects cast shadows on each other properly
+		this.shadowGenerator.transparencyShadow = true;
+		this.shadowGenerator.bias = 0.0001; // Small bias to prevent acne
 		
 		// 5. Object Manager (Handles Logic)
 		this.objectManager = new ObjectManager(this.scene, this.shadowGenerator);
@@ -125,6 +131,8 @@ export class BuilderScene {
 		
 		// Hide Gizmos
 		this.objectManager.gizmoManager.positionGizmoEnabled = false;
+		this.objectManager.gizmoManager.rotationGizmoEnabled = false;
+		this.objectManager.gizmoManager.scaleGizmoEnabled = false;
 		
 		// Hide all placed objects
 		this.objectManager.placedObjects.forEach(obj => {
@@ -150,8 +158,9 @@ export class BuilderScene {
 		this.cursorMesh.setEnabled(this.savedState.cursorEnabled);
 		this.scene.clearColor = this.savedState.clearColor;
 		
-		// Restore Gizmos
-		this.objectManager.gizmoManager.positionGizmoEnabled = this.savedState.gizmosEnabled;
+		// Restore Gizmos (Only restore the one that was enabled, or default to position)
+		// Actually, ObjectManager handles state, so we just re-trigger its update
+		this.objectManager.updateGizmoSettings();
 		
 		// Restore objects
 		this.objectManager.placedObjects.forEach(obj => {
@@ -400,12 +409,10 @@ export class BuilderScene {
 			}
 			return;
 		}
-		
-		// Dragging logic removed; handled by GizmoManager in ObjectManager
 	}
 	
 	handlePointerUp (info) {
-		// Drag end logic removed; handled by GizmoManager
+		// Drag end logic handled by GizmoManager
 	}
 	
 	handleDoubleClick (info) {

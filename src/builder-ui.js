@@ -18,8 +18,6 @@ export class BuilderUI {
 			gridSize: 2.5,
 			gridColor: '#555555',
 			bgColor: '#2c3e50',
-			snapGrid: false,
-			snapObj: true,
 			autoSave: true // Default enabled
 		};
 		
@@ -176,17 +174,11 @@ export class BuilderUI {
 		// Apply to ObjectManager
 		this.manager.defaultYOffset = parseFloat(this.globalSettings.yOffset);
 		this.manager.gridSize = parseFloat(this.globalSettings.gridSize);
-		this.manager.snapToGrid = this.globalSettings.snapGrid;
-		this.manager.snapToObjects = this.globalSettings.snapObj;
 		this.manager.autoSaveEnabled = this.globalSettings.autoSave;
 		
 		// Apply to Scene
 		this.scene.setGridColors(this.globalSettings.gridColor, this.globalSettings.bgColor);
 		this.scene.updateGridSize(this.manager.gridSize);
-		
-		// Sync Quick Toggles in Sidebar
-		document.getElementById('chkSnapGrid').checked = this.globalSettings.snapGrid;
-		document.getElementById('chkSnapObj').checked = this.globalSettings.snapObj;
 		
 		// Update UI text immediately
 		this.updateAutoSaveUI();
@@ -303,21 +295,6 @@ export class BuilderUI {
 	}
 	
 	setupControls () {
-		// Snapping Toggles (Quick Access)
-		const chkSnapGrid = document.getElementById('chkSnapGrid');
-		const chkSnapObj = document.getElementById('chkSnapObj');
-		
-		chkSnapGrid.onchange = (e) => {
-			this.manager.snapToGrid = e.target.checked;
-			this.globalSettings.snapGrid = e.target.checked;
-			this.saveSettings();
-		};
-		chkSnapObj.onchange = (e) => {
-			this.manager.snapToObjects = e.target.checked;
-			this.globalSettings.snapObj = e.target.checked;
-			this.saveSettings();
-		};
-		
 		// Reset Camera
 		document.getElementById('btnResetCam').onclick = () => {
 			this.scene.resetCamera();
@@ -422,8 +399,6 @@ export class BuilderUI {
 		const inGridSize = document.getElementById('settingGridSize');
 		const inGridColor = document.getElementById('settingGridColor');
 		const inBgColor = document.getElementById('settingBgColor');
-		const inSnapGrid = document.getElementById('settingSnapGrid');
-		const inSnapObj = document.getElementById('settingSnapObj');
 		const inAutoSave = document.getElementById('settingAutoSave');
 		
 		btnOpen.onclick = () => {
@@ -432,8 +407,6 @@ export class BuilderUI {
 			inGridSize.value = this.globalSettings.gridSize;
 			inGridColor.value = this.globalSettings.gridColor;
 			inBgColor.value = this.globalSettings.bgColor;
-			inSnapGrid.checked = this.globalSettings.snapGrid;
-			inSnapObj.checked = this.globalSettings.snapObj;
 			inAutoSave.checked = this.globalSettings.autoSave;
 			
 			modal.style.display = 'flex';
@@ -449,8 +422,6 @@ export class BuilderUI {
 			this.globalSettings.gridSize = parseFloat(inGridSize.value);
 			this.globalSettings.gridColor = inGridColor.value;
 			this.globalSettings.bgColor = inBgColor.value;
-			this.globalSettings.snapGrid = inSnapGrid.checked;
-			this.globalSettings.snapObj = inSnapObj.checked;
 			this.globalSettings.autoSave = inAutoSave.checked;
 			
 			this.saveSettings();

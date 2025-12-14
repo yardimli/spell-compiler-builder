@@ -12,13 +12,13 @@ export class ObjectManager {
 		// State
 		this.placedObjects = []; // Array of metadata objects
 		this.selectedMeshes = []; // Array of currently selected Babylon Meshes
+		this.selectionProxy = null; // TransformNode for multi-selection group transforms
 		
-		// Settings (Defaults as requested: Grid Snap OFF, Object Snap ON)
-		this._snapToGrid = false;
-		this._snapToObjects = true;
+		// Settings
 		this._gridSize = 2.5;
-		this.defaultYOffset = 0; // New setting for Y offset
+		this.defaultYOffset = 0;
 		this.autoSaveEnabled = true;
+		this.gizmoMode = 'position'; // 'position', 'rotation', 'scaling'
 		
 		// Initialize Undo/Redo Manager
 		this.undoRedo = new UndoRedoManager(this);
@@ -30,16 +30,8 @@ export class ObjectManager {
 		this.gizmoManager = new BABYLON.GizmoManager(this.scene);
 		this.setupGizmo();
 		
-		// Drag State for Gizmo Multi-Select
+		// Drag State
 		this.dragStartData = null;
-		this.lastAttachedMeshPosition = null;
-	}
-	
-	// --- Getters/Setters to sync Gizmo settings ---
-	get snapToGrid() { return this._snapToGrid; }
-	set snapToGrid(val) {
-		this._snapToGrid = val;
-		this.updateGizmoSettings();
 	}
 	
 	get gridSize() { return this._gridSize; }
@@ -50,98 +42,76 @@ export class ObjectManager {
 	
 	// --- Gizmo Setup ---
 	setupGizmo() {
-		// Enable only Position Gizmo (Arrows)
+		// Initialize all gizmos but control visibility via updateGizmoSettings
 		this.gizmoManager.positionGizmoEnabled = true;
-		this.gizmoManager.rotationGizmoEnabled = false;
-		this.gizmoManager.scaleGizmoEnabled = false;
+		this.gizmoManager.rotationGizmoEnabled = true;
+		this.gizmoManager.scaleGizmoEnabled = true;
 		this.gizmoManager.boundingBoxGizmoEnabled = false;
 		
 		// Don't attach automatically on pointer events, we control attachment via selection
 		this.gizmoManager.usePointerToAttachGizmos = false;
 		this.gizmoManager.clearGizmoOnEmptyPointerEvent = true;
 		
-		// Configure Visuals
-		// (Optional: customize colors if needed, defaults are RGB)
+		// --- Undo/Redo Logic for All Gizmos ---
+		// We hook into the active gizmo's drag events to record state.
+		// Since we can switch modes, we need a generic handler or hook all.
 		
-		// --- Undo/Redo & Multi-Select Logic ---
-		const gizmo = this.gizmoManager.gizmos.positionGizmo;
-		if (gizmo) {
-			// 1. Drag Start: Record state
+		const setupDragEvents = (gizmoType) => {
+			const gizmo = this.gizmoManager.gizmos[gizmoType];
+			if (!gizmo) return;
+			
 			gizmo.onDragStartObservable.add(() => {
 				if (this.selectedMeshes.length === 0) return;
 				
-				// Snapshot for Undo
+				// Snapshot World Transforms for Undo
 				this.dragStartData = this.selectedMeshes.map(mesh => ({
 					id: mesh.metadata.id,
-					position: mesh.position.asArray(),
-					rotation: mesh.rotation.asArray(),
-					scaling: mesh.scaling.asArray()
+					position: mesh.absolutePosition.asArray(),
+					rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),
+					scaling: mesh.absoluteScaling.asArray()
 				}));
-				
-				// Track position for delta calculation
-				if (this.gizmoManager.attachedMesh) {
-					this.lastAttachedMeshPosition = this.gizmoManager.attachedMesh.position.clone();
-				}
 			});
 			
-			// 2. Dragging: Apply delta to other selected meshes
-			gizmo.onDragObservable.add(() => {
-				const attached = this.gizmoManager.attachedMesh;
-				if (!attached || !this.lastAttachedMeshPosition) return;
-				
-				// Calculate how much the gizmo moved the attached mesh
-				const currentPos = attached.position;
-				const delta = currentPos.subtract(this.lastAttachedMeshPosition);
-				
-				// Apply this delta to all OTHER selected meshes
-				this.selectedMeshes.forEach(mesh => {
-					if (mesh !== attached) {
-						mesh.position.addInPlace(delta);
-					}
-				});
-				
-				// Update tracker
-				this.lastAttachedMeshPosition = currentPos.clone();
-				
-				// Live UI Update (Optional, for single selection)
-				if (this.selectedMeshes.length === 1 && this.onSelectionChange) {
-					const data = this.placedObjects.find(o => o.id === attached.metadata.id);
-					if (data) {
-						data.position = attached.position.asArray();
-						this.onSelectionChange([data]);
-					}
-				}
-			});
-			
-			// 3. Drag End: Commit to history
 			gizmo.onDragEndObservable.add(() => {
 				if (!this.dragStartData) return;
 				
 				const changes = [];
 				
+				// Calculate New World Transforms
 				this.selectedMeshes.forEach(mesh => {
 					const id = mesh.metadata.id;
 					const startData = this.dragStartData.find(d => d.id === id);
-					
 					if (!startData) return;
 					
+					// Get current absolute values
+					// Note: If parented to proxy, absolutePosition handles the math
+					const currentPos = mesh.absolutePosition;
+					const currentRot = mesh.absoluteRotationQuaternion.toEulerAngles();
+					const currentScale = mesh.absoluteScaling;
+					
 					const currentData = {
-						position: mesh.position.asArray(),
-						rotation: mesh.rotation.asArray(),
-						scaling: mesh.scaling.asArray()
+						position: currentPos.asArray(),
+						rotation: currentRot.asArray(),
+						scaling: currentScale.asArray()
 					};
 					
-					// Check if changed
-					if (JSON.stringify(currentData.position) !== JSON.stringify(startData.position)) {
-						// Update internal data model
+					// Check if changed (simple stringify check)
+					if (JSON.stringify(currentData) !== JSON.stringify(startData)) {
+						// Update internal data model immediately
 						const objIndex = this.placedObjects.findIndex(o => o.id === id);
 						if (objIndex !== -1) {
 							this.placedObjects[objIndex].position = currentData.position;
+							this.placedObjects[objIndex].rotation = currentData.rotation;
+							this.placedObjects[objIndex].scaling = currentData.scaling;
 						}
 						
 						changes.push({
 							id: id,
-							oldData: startData,
+							oldData: {
+								position: startData.position,
+								rotation: startData.rotation,
+								scaling: startData.scaling
+							},
 							newData: currentData
 						});
 					}
@@ -152,20 +122,35 @@ export class ObjectManager {
 						type: 'TRANSFORM',
 						data: changes
 					});
+					
+					// Update UI if single selection
+					if (this.selectedMeshes.length === 1 && this.onSelectionChange) {
+						const data = this.placedObjects.find(o => o.id === this.selectedMeshes[0].metadata.id);
+						this.onSelectionChange([data]);
+					}
 				}
 				
 				this.dragStartData = null;
-				this.lastAttachedMeshPosition = null;
 			});
-		}
+		};
+		
+		setupDragEvents('positionGizmo');
+		setupDragEvents('rotationGizmo');
+		setupDragEvents('scaleGizmo');
 		
 		this.updateGizmoSettings();
 	}
 	
+	setGizmoMode(mode) {
+		this.gizmoMode = mode;
+		this.updateGizmoSettings();
+	}
+	
 	updateGizmoSettings() {
-		if (this.gizmoManager.gizmos.positionGizmo) {
-			this.gizmoManager.gizmos.positionGizmo.snapDistance = this._snapToGrid ? this._gridSize : 0;
-		}
+		// Enable only the active gizmo
+		this.gizmoManager.positionGizmoEnabled = (this.gizmoMode === 'position');
+		this.gizmoManager.rotationGizmoEnabled = (this.gizmoMode === 'rotation');
+		this.gizmoManager.scaleGizmoEnabled = (this.gizmoMode === 'scaling');
 	}
 	
 	// --- Object Management ---
@@ -173,27 +158,19 @@ export class ObjectManager {
 	async addAsset (filename, position) {
 		try {
 			// STACKING LOGIC: Check if a single object is selected to stack on top
-			// Default to cursor position
 			let targetX = position.x;
 			let targetZ = position.z;
 			let baseY = position.y;
 			
 			if (this.selectedMeshes.length === 1) {
 				const baseMesh = this.selectedMeshes[0];
-				// Calculate world bounds of the base mesh
 				const bounds = baseMesh.getHierarchyBoundingVectors();
-				
-				// Override X and Z to center of selected object
 				targetX = (bounds.min.x + bounds.max.x) / 2;
 				targetZ = (bounds.min.z + bounds.max.z) / 2;
-				
-				// Override Base Y to top of selected object
 				baseY = bounds.max.y;
 			}
 			
 			const id = BABYLON.Tools.RandomId();
-			
-			// Generate Unique Name: filename_1, filename_2, etc.
 			const baseName = filename.replace(/\.glb$/i, '');
 			const existing = this.placedObjects.filter(o => o.name && o.name.startsWith(baseName));
 			
@@ -213,17 +190,12 @@ export class ObjectManager {
 			
 			root.name = uniqueName;
 			
-			// Fix for Gap Issue:
-			// Ensure the mesh is normalized (scale/rotation) before calculating bounds
-			// and ensure we get the precise bottom of the visual geometry.
 			root.computeWorldMatrix(true);
 			result.meshes.forEach(m => m.computeWorldMatrix(true));
 			
-			// Calculate bounds of the hierarchy in its default state
 			const bounds = root.getHierarchyBoundingVectors();
 			const heightOffset = -bounds.min.y;
 			
-			// Apply position: Target X/Z + Base Y + Pivot Offset + Default Offset
 			if (this.selectedMeshes.length === 1) {
 				root.position = new BABYLON.Vector3(targetX, baseY, targetZ);
 			} else {
@@ -244,7 +216,7 @@ export class ObjectManager {
 				file: filename,
 				type: 'mesh',
 				isLocked: false,
-				color: '#ffffff', // Default color
+				color: '#ffffff',
 				position: root.position.asArray(),
 				rotation: root.rotationQuaternion ? root.rotationQuaternion.toEulerAngles().asArray() : root.rotation.asArray(),
 				scaling: root.scaling.asArray()
@@ -253,7 +225,6 @@ export class ObjectManager {
 			this.placedObjects.push(objData);
 			this.selectObject(root, false);
 			
-			// Add to history via new manager
 			this.undoRedo.add({ type: 'ADD', data: [objData] });
 			
 		} catch (err) {
@@ -263,11 +234,9 @@ export class ObjectManager {
 	
 	async addAssetGrid (filename, position, rows, cols) {
 		try {
-			// 1. Load the first one to measure it
 			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_FOLDER, filename, this.scene);
 			const root = result.meshes[0];
 			
-			// Calculate bounds for tight packing
 			const bounds = root.getHierarchyBoundingVectors();
 			const width = bounds.max.x - bounds.min.x;
 			const depth = bounds.max.z - bounds.min.z;
@@ -276,14 +245,11 @@ export class ObjectManager {
 			const addedObjectsData = [];
 			const baseName = filename.replace(/\.glb$/i, '');
 			
-			// Start position (Top-Left of the grid centered at cursor)
 			const startX = position.x - (width * cols) / 2 + width / 2;
 			const startZ = position.z - (depth * rows) / 2 + depth / 2;
 			
-			// Helper to setup mesh
 			const setupMesh = (mesh, r, c) => {
 				const id = BABYLON.Tools.RandomId();
-				// Unique name
 				const existingCount = this.placedObjects.filter(o => o.name && o.name.startsWith(baseName)).length + addedObjectsData.length;
 				const uniqueName = `${baseName}_${existingCount + 1}`;
 				
@@ -296,7 +262,6 @@ export class ObjectManager {
 				
 				mesh.metadata = { id: id, isObject: true, file: filename };
 				
-				// Ensure shadows/pickable
 				mesh.getChildMeshes(false).forEach(m => {
 					this.shadowGenerator.addShadowCaster(m, true);
 					m.receiveShadows = true;
@@ -320,20 +285,16 @@ export class ObjectManager {
 				return mesh;
 			};
 			
-			// Setup (0,0) - The one we loaded
 			setupMesh(root, 0, 0);
 			
-			// Loop for the rest
 			for (let r = 0; r < rows; r++) {
 				for (let c = 0; c < cols; c++) {
-					if (r === 0 && c === 0) continue; // Skip the first one
-					
+					if (r === 0 && c === 0) continue;
 					const clone = root.clone();
 					setupMesh(clone, r, c);
 				}
 			}
 			
-			// Select all new objects
 			this.selectedMeshes = [];
 			addedObjectsData.forEach(d => {
 				const m = this.findMeshById(d.id);
@@ -384,27 +345,23 @@ export class ObjectManager {
 		const deletedData = [];
 		const deletedIds = [];
 		
-		// Create a copy of the array to iterate safely while modifying selection
 		const meshesToDelete = [...this.selectedMeshes];
 		
 		meshesToDelete.forEach(mesh => {
 			const id = mesh.metadata.id;
 			const objData = this.placedObjects.find(o => o.id === id);
 			
-			// CHECK LOCKED STATUS
 			if (objData && !objData.isLocked) {
 				deletedData.push(objData);
 				deletedIds.push(id);
-				this.removeObjectById(id, false); // Don't clear selection yet
+				this.removeObjectById(id, false);
 			}
 		});
 		
-		// If anything was deleted, add to history
 		if (deletedData.length > 0) {
 			this.undoRedo.add({ type: 'DELETE', data: deletedData });
 		}
 		
-		// Update UI
 		this.onSelectionChange(null);
 	}
 	
@@ -414,22 +371,19 @@ export class ObjectManager {
 		const newObjectsData = [];
 		const newMeshes = [];
 		
-		// 1. Deselect current (visual only)
 		this.selectedMeshes.forEach(m => this.setSelectionHighlight(m, false));
 		
-		// 2. Clone Loop
 		this.selectedMeshes.forEach(originalMesh => {
 			const originalData = this.placedObjects.find(o => o.id === originalMesh.metadata.id);
 			if (!originalData) return;
 			
 			const newId = BABYLON.Tools.RandomId();
-			// Create unique name
 			const baseName = originalData.name.split('_')[0];
 			const newName = `${baseName}_copy_${Math.floor(Math.random() * 1000)}`;
 			
-			// Offset position slightly (Closer to original: 0.5 units)
 			const offset = new BABYLON.Vector3(0.5, 0, 0.5);
-			const newPos = originalMesh.position.clone().add(offset);
+			// Use absolute position for cloning
+			const newPos = originalMesh.absolutePosition.clone().add(offset);
 			
 			let newRoot;
 			
@@ -446,17 +400,15 @@ export class ObjectManager {
 				sphere.isPickable = true;
 				newRoot = light;
 			} else {
-				// Clone Mesh using instantiateHierarchy with doNotInstantiate: true
-				// This performs a deep clone of the hierarchy, preserving all visual properties
-				// (scale, rotation, materials, textures) exactly as they appear in the scene.
 				newRoot = originalMesh.instantiateHierarchy(null, { doNotInstantiate: true });
 				newRoot.name = newName;
 				newRoot.position = newPos;
-				// Rotation and Scaling are automatically copied by instantiateHierarchy
+				// Ensure we copy rotation/scale correctly if original was parented
+				newRoot.rotationQuaternion = originalMesh.absoluteRotationQuaternion.clone();
+				newRoot.scaling = originalMesh.absoluteScaling.clone();
 				
 				newRoot.metadata = { id: newId, isObject: true, file: originalData.file };
 				
-				// Ensure shadows/pickable are set for all children
 				const descendants = newRoot.getChildMeshes(false);
 				if (newRoot instanceof BABYLON.Mesh) descendants.push(newRoot);
 				
@@ -465,7 +417,6 @@ export class ObjectManager {
 					m.receiveShadows = true;
 					m.isPickable = true;
 					
-					// If the material was tinted (shared from original), clone it to ensure independence
 					if (m.material && m.material.name.includes('_tinted')) {
 						m.material = m.material.clone(m.material.name + '_' + newId);
 					}
@@ -477,7 +428,7 @@ export class ObjectManager {
 				name: newName,
 				type: originalData.type || 'mesh',
 				file: originalData.file,
-				isLocked: false, // Copies are unlocked by default
+				isLocked: false,
 				color: originalData.color || '#ffffff',
 				position: newRoot.position.asArray(),
 				rotation: newRoot.rotationQuaternion ? newRoot.rotationQuaternion.toEulerAngles().asArray() : newRoot.rotation.asArray(),
@@ -489,21 +440,10 @@ export class ObjectManager {
 			newMeshes.push(newRoot);
 		});
 		
-		// 3. Select new objects
-		this.selectedMeshes = newMeshes;
-		this.selectedMeshes.forEach(m => this.setSelectionHighlight(m, true));
-		// Update Gizmo to new selection
-		if (this.selectedMeshes.length > 0) {
-			this.gizmoManager.attachToMesh(this.selectedMeshes[this.selectedMeshes.length - 1]);
-		}
+		// Reset selection to new objects
+		this.selectObject(null, false); // Clears proxy
+		newMeshes.forEach(m => this.selectObject(m, true));
 		
-		// 4. Notify UI
-		if (this.onSelectionChange) {
-			const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
-			this.onSelectionChange(selectedData);
-		}
-		
-		// 5. History
 		this.undoRedo.add({ type: 'ADD', data: newObjectsData });
 	}
 	
@@ -511,23 +451,12 @@ export class ObjectManager {
 		const mesh = this.findMeshById(id);
 		if (mesh) {
 			if (clearSelection) {
-				// If we are removing a specific object, remove it from selection array
 				this.selectedMeshes = this.selectedMeshes.filter(m => m !== mesh);
-				if (this.selectedMeshes.length === 0) {
-					this.onSelectionChange(null);
-					this.gizmoManager.attachToMesh(null);
-				} else {
-					// Update UI with remaining selection
-					const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
-					this.onSelectionChange(selectedData);
-					// Reattach gizmo to remaining
-					this.gizmoManager.attachToMesh(this.selectedMeshes[this.selectedMeshes.length - 1]);
-				}
+				this.updateSelectionProxy();
 			}
 			mesh.dispose();
 		}
 		
-		// Remove from data array
 		this.placedObjects = this.placedObjects.filter(o => o.id !== id);
 	}
 	
@@ -589,43 +518,83 @@ export class ObjectManager {
 			if (mesh) {
 				const index = this.selectedMeshes.indexOf(mesh);
 				if (index !== -1) {
-					// Deselect if already selected
 					this.setSelectionHighlight(mesh, false);
 					this.selectedMeshes.splice(index, 1);
 				} else {
-					// Add to selection
 					this.selectedMeshes.push(mesh);
 					this.setSelectionHighlight(mesh, true);
 				}
 			}
 		}
 		
-		// --- GIZMO ATTACHMENT ---
-		if (this.selectedMeshes.length > 0) {
-			// Attach gizmo to the last selected mesh (most recent)
-			// For multi-select, we track this mesh's movement and apply delta to others
-			const primaryMesh = this.selectedMeshes[this.selectedMeshes.length - 1];
-			
-			// Check if locked
-			const objData = this.placedObjects.find(o => o.id === primaryMesh.metadata.id);
-			if (objData && objData.isLocked) {
-				this.gizmoManager.attachToMesh(null);
-			} else {
-				this.gizmoManager.attachToMesh(primaryMesh);
-			}
-		} else {
-			this.gizmoManager.attachToMesh(null);
-		}
+		this.updateSelectionProxy();
 		
 		// Update UI
 		if (this.onSelectionChange) {
 			if (this.selectedMeshes.length > 0) {
-				// Map meshes to their data objects
 				const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
 				this.onSelectionChange(selectedData);
 			} else {
 				this.onSelectionChange(null);
 			}
+		}
+	}
+	
+	// Handles creating/destroying the proxy node for multi-selection
+	updateSelectionProxy() {
+		// 1. Cleanup existing proxy
+		if (this.selectionProxy) {
+			// Unparent children (restores world transform)
+			// Note: We must be careful not to leave them parented to disposed node
+			const children = this.selectionProxy.getChildren();
+			children.forEach(c => c.setParent(null));
+			
+			this.gizmoManager.attachToMesh(null);
+			this.selectionProxy.dispose();
+			this.selectionProxy = null;
+		}
+		
+		// 2. Setup new state
+		if (this.selectedMeshes.length === 0) {
+			this.gizmoManager.attachToMesh(null);
+			return;
+		}
+		
+		// Check if all selected are locked
+		const allLocked = this.selectedMeshes.every(m => {
+			const data = this.placedObjects.find(o => o.id === m.metadata.id);
+			return data && data.isLocked;
+		});
+		
+		if (allLocked) {
+			this.gizmoManager.attachToMesh(null);
+			return;
+		}
+		
+		if (this.selectedMeshes.length === 1) {
+			// Single Object: Attach directly
+			this.gizmoManager.attachToMesh(this.selectedMeshes[0]);
+		} else {
+			// Multi Object: Create Proxy
+			this.selectionProxy = new BABYLON.TransformNode("selectionProxy", this.scene);
+			
+			// Calculate Center
+			let min = new BABYLON.Vector3(Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE);
+			let max = new BABYLON.Vector3(-Number.MAX_VALUE, -Number.MAX_VALUE, -Number.MAX_VALUE);
+			
+			this.selectedMeshes.forEach(m => {
+				const bounds = m.getHierarchyBoundingVectors();
+				min = BABYLON.Vector3.Minimize(min, bounds.min);
+				max = BABYLON.Vector3.Maximize(max, bounds.max);
+			});
+			
+			const center = min.add(max).scale(0.5);
+			this.selectionProxy.position = center;
+			
+			// Parent meshes to proxy (maintains world position)
+			this.selectedMeshes.forEach(m => m.setParent(this.selectionProxy));
+			
+			this.gizmoManager.attachToMesh(this.selectionProxy);
 		}
 	}
 	
@@ -642,11 +611,8 @@ export class ObjectManager {
 			this.scene.lights.find(l => l.metadata && l.metadata.id === id);
 	}
 	
-	// --- Transformation & Snapping ---
-	// Previous drag methods (startDrag, handleDrag, endDrag) removed/deprecated
-	// as functionality is now handled by the GizmoManager events in constructor.
+	// --- Transformation  ---
 	
-	// Direct update from Property Panel (Single Object only for now)
 	updateObjectProperty (id, prop, value) {
 		const mesh = this.findMeshById(id);
 		if (!mesh) return;
@@ -656,13 +622,8 @@ export class ObjectManager {
 		// Handle Locking
 		if (prop === 'isLocked') {
 			objData.isLocked = value;
-			// If we just locked the currently selected object (and it's the one with gizmo), detach gizmo
-			if (value && this.gizmoManager.attachedMesh === mesh) {
-				this.gizmoManager.attachToMesh(null);
-			} else if (!value && this.selectedMeshes.includes(mesh) && !this.gizmoManager.attachedMesh) {
-				// If unlocked and selected, reattach
-				this.gizmoManager.attachToMesh(mesh);
-			}
+			// Refresh gizmo attachment logic
+			this.updateSelectionProxy();
 			return;
 		}
 		
@@ -675,9 +636,9 @@ export class ObjectManager {
 		
 		// Capture state for undo
 		const oldData = {
-			position: mesh.position.asArray(),
-			rotation: mesh.rotation.asArray(),
-			scaling: mesh.scaling.asArray()
+			position: mesh.absolutePosition.asArray(),
+			rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),
+			scaling: mesh.absoluteScaling.asArray()
 		};
 		
 		if (prop === 'name') {
@@ -686,27 +647,37 @@ export class ObjectManager {
 			return;
 		}
 		
-		// Value is {x, y, z} or array
+		// If we are modifying transform properties manually via UI,
+		// we should temporarily detach from proxy to set absolute values easily,
+		// or calculate local values.
+		// Simplest: If mesh has parent (proxy), detach, update, re-attach?
+		// Or just use setAbsolutePosition.
+		
 		if (prop === 'position') {
-			mesh.position = new BABYLON.Vector3(value.x, value.y, value.z);
+			mesh.setAbsolutePosition(new BABYLON.Vector3(value.x, value.y, value.z));
 			objData.position = [value.x, value.y, value.z];
 		} else if (prop === 'rotation') {
 			// Convert degrees to radians
-			mesh.rotation = new BABYLON.Vector3(
+			const rads = new BABYLON.Vector3(
 				BABYLON.Tools.ToRadians(value.x),
 				BABYLON.Tools.ToRadians(value.y),
 				BABYLON.Tools.ToRadians(value.z)
 			);
-			objData.rotation = mesh.rotation.asArray();
+			mesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(rads);
+			objData.rotation = rads.asArray();
 		} else if (prop === 'scaling') {
+			// Scaling is tricky with parents.
+			// For UI input, we usually mean local scaling if single object,
+			// or absolute scaling?
+			// Let's assume local scaling for single object edit.
 			mesh.scaling = new BABYLON.Vector3(value.x, value.y, value.z);
 			objData.scaling = [value.x, value.y, value.z];
 		}
 		
 		const newData = {
-			position: mesh.position.asArray(),
-			rotation: mesh.rotation.asArray(),
-			scaling: mesh.scaling.asArray()
+			position: mesh.absolutePosition.asArray(),
+			rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),
+			scaling: mesh.absoluteScaling.asArray()
 		};
 		
 		this.undoRedo.add({
@@ -719,32 +690,23 @@ export class ObjectManager {
 		});
 	}
 	
-	// Update property for multiple objects (specifically for locking)
 	updateMultipleObjectsProperty(prop, value) {
 		if (prop === 'isLocked') {
 			this.selectedMeshes.forEach(mesh => {
 				const objData = this.placedObjects.find(o => o.id === mesh.metadata.id);
 				if (objData) objData.isLocked = value;
 			});
-			// Update Gizmo visibility based on lock status
-			if (value) {
-				this.gizmoManager.attachToMesh(null);
-			} else if (this.selectedMeshes.length > 0) {
-				this.gizmoManager.attachToMesh(this.selectedMeshes[this.selectedMeshes.length - 1]);
-			}
+			this.updateSelectionProxy();
 		}
 	}
 	
-	// Helper to apply color recursively
 	applyColorToMesh (root, hexColor) {
 		const color = BABYLON.Color3.FromHexString(hexColor);
 		const meshes = root.getChildMeshes(false);
-		// Include root if it has material
 		if (root.material) meshes.push(root);
 		
 		meshes.forEach(m => {
 			if (m.material) {
-				// Clone material to avoid affecting other instances sharing same material
 				if (!m.material.name.includes('_tinted')) {
 					m.material = m.material.clone(m.material.name + '_tinted');
 				}
@@ -758,16 +720,20 @@ export class ObjectManager {
 		});
 	}
 	
-	// Align Selected Objects
-	// Mode: 'min', 'max', 'center'
 	alignSelection(axis, mode) {
 		if (this.selectedMeshes.length < 2) return;
 		
-		// 1. Calculate Group Bounds
+		// Detach proxy to manipulate individual positions easily
+		if (this.selectionProxy) {
+			this.selectedMeshes.forEach(m => m.setParent(null));
+			this.selectionProxy.dispose();
+			this.selectionProxy = null;
+			this.gizmoManager.attachToMesh(null);
+		}
+		
 		let groupMin = Number.MAX_VALUE;
 		let groupMax = -Number.MAX_VALUE;
 		
-		// We need to check the bounds of every selected object to find the extreme edges
 		this.selectedMeshes.forEach(m => {
 			const bounds = m.getHierarchyBoundingVectors();
 			if (axis === 'x') {
@@ -785,17 +751,13 @@ export class ObjectManager {
 		const groupCenter = (groupMin + groupMax) / 2;
 		const targetValue = (mode === 'min') ? groupMin : (mode === 'max') ? groupMax : groupCenter;
 		
-		// 2. Prepare Changes
 		const changes = [];
 		
 		this.selectedMeshes.forEach(mesh => {
 			const id = mesh.metadata.id;
-			
-			// Check if locked
 			const objData = this.placedObjects.find(o => o.id === id);
 			if (objData && objData.isLocked) return;
 			
-			// Calculate this object's specific edge/center
 			const bounds = mesh.getHierarchyBoundingVectors();
 			let objValue;
 			
@@ -808,28 +770,24 @@ export class ObjectManager {
 			}
 			
 			const delta = targetValue - objValue;
-			
-			// Skip if already aligned (float tolerance)
 			if (Math.abs(delta) < 0.001) return;
 			
 			const oldData = {
-				position: mesh.position.asArray(),
-				rotation: mesh.rotation.asArray(),
-				scaling: mesh.scaling.asArray()
+				position: mesh.absolutePosition.asArray(),
+				rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),
+				scaling: mesh.absoluteScaling.asArray()
 			};
 			
-			// Apply to Mesh
 			if (axis === 'x') mesh.position.x += delta;
 			if (axis === 'y') mesh.position.y += delta;
 			if (axis === 'z') mesh.position.z += delta;
 			
 			const newData = {
-				position: mesh.position.asArray(),
-				rotation: mesh.rotation.asArray(),
-				scaling: mesh.scaling.asArray()
+				position: mesh.absolutePosition.asArray(),
+				rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),
+				scaling: mesh.absoluteScaling.asArray()
 			};
 			
-			// Update Internal Data
 			if (objData) {
 				objData.position = newData.position;
 			}
@@ -841,32 +799,35 @@ export class ObjectManager {
 			});
 		});
 		
-		// 3. History & Notify
 		if (changes.length > 0) {
 			this.undoRedo.add({
 				type: 'TRANSFORM',
 				data: changes
 			});
 			
-			// Notify UI (Selection Change)
 			if (this.onSelectionChange) {
 				const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
 				this.onSelectionChange(selectedData);
 			}
 		}
+		
+		// Re-establish proxy
+		this.updateSelectionProxy();
 	}
 	
-	// --- NEW: Method required by UndoRedoManager ---
 	updateObjectTransform (id, data) {
+		// When undoing, we might need to detach proxy to set absolute values correctly
+		if (this.selectionProxy) {
+			this.selectObject(null, false); // Clear selection to remove proxy
+		}
+		
 		const mesh = this.findMeshById(id);
 		if (!mesh) return;
 		
-		// Update Mesh
 		mesh.position = BABYLON.Vector3.FromArray(data.position);
-		mesh.rotation = BABYLON.Vector3.FromArray(data.rotation);
+		mesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(BABYLON.Vector3.FromArray(data.rotation));
 		mesh.scaling = BABYLON.Vector3.FromArray(data.scaling);
 		
-		// Update Internal Data
 		const objData = this.placedObjects.find(o => o.id === id);
 		if (objData) {
 			objData.position = data.position;
@@ -874,13 +835,11 @@ export class ObjectManager {
 			objData.scaling = data.scaling;
 		}
 		
-		// Refresh UI if this object is selected
 		if (this.selectedMeshes.includes(mesh) && this.selectedMeshes.length === 1 && this.onSelectionChange) {
 			this.onSelectionChange([objData]);
 		}
 	}
 	
-	// Load/Save Helpers
 	getMapData (mapName) {
 		return {
 			name: mapName,
@@ -890,7 +849,6 @@ export class ObjectManager {
 	}
 	
 	loadMapData (data) {
-		// Clear existing
 		[...this.scene.meshes].forEach(m => {
 			if (m.metadata && m.metadata.isObject) m.dispose();
 		});
@@ -900,7 +858,6 @@ export class ObjectManager {
 		
 		this.placedObjects = [];
 		this.selectedMeshes = [];
-		// Reset history via manager
 		this.undoRedo.history = [];
 		this.undoRedo.historyIndex = -1;
 		if (this.undoRedo.onHistoryChange) this.undoRedo.onHistoryChange();
@@ -912,12 +869,10 @@ export class ObjectManager {
 		}
 	}
 	
-	// New: Clear Scene Method
 	clearScene () {
 		this.loadMapData({ assets: [] });
 	}
 	
-	// Auto-Save Logic
 	saveToAutoSave() {
 		if (!this.autoSaveEnabled) return false;
 		const data = this.getMapData('autosave');

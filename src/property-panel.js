@@ -10,6 +10,13 @@ export class PropertyPanel {
 		this.multiView = document.getElementById('multi-obj-props');
 		this.multiList = document.getElementById('multi-select-container');
 		
+		// Gizmo Buttons
+		this.gizmoBtns = {
+			pos: document.getElementById('btnGizmoPos'),
+			rot: document.getElementById('btnGizmoRot'),
+			scale: document.getElementById('btnGizmoScale')
+		};
+		
 		// Cache inputs with safety check
 		const getEl = (id) => {
 			const el = document.getElementById(id);
@@ -55,11 +62,36 @@ export class PropertyPanel {
 		this.isUpdatingUI = false;
 		
 		this.setupListeners();
+		this.setupGizmoControls();
 		
 		// Subscribe to object manager events
 		if (this.objectManager) {
 			this.objectManager.onSelectionChange = (data) => this.updateUI(data);
 		}
+	}
+	
+	setupGizmoControls() {
+		const setMode = (mode, btn) => {
+			this.objectManager.setGizmoMode(mode);
+			// Update UI
+			Object.values(this.gizmoBtns).forEach(b => b.classList.remove('active'));
+			btn.classList.add('active');
+		};
+		
+		if (this.gizmoBtns.pos) this.gizmoBtns.pos.onclick = () => setMode('position', this.gizmoBtns.pos);
+		if (this.gizmoBtns.rot) this.gizmoBtns.rot.onclick = () => setMode('rotation', this.gizmoBtns.rot);
+		if (this.gizmoBtns.scale) this.gizmoBtns.scale.onclick = () => setMode('scaling', this.gizmoBtns.scale);
+		
+		// Keyboard Shortcuts
+		window.addEventListener('keydown', (e) => {
+			if (e.target.tagName === 'INPUT') return; // Ignore if typing
+			
+			switch(e.key.toLowerCase()) {
+				case 'g': setMode('position', this.gizmoBtns.pos); break;
+				case 'r': setMode('rotation', this.gizmoBtns.rot); break;
+				case 's': setMode('scaling', this.gizmoBtns.scale); break;
+			}
+		});
 	}
 	
 	setupListeners () {

@@ -129,6 +129,9 @@
 		button.info { background: #3498db; }
 		button:disabled { background: #7f8c8d; cursor: not-allowed; }
 		
+		/* Active state for tool buttons */
+		button.active { background: #f1c40f; color: #2c3e50; font-weight: bold; }
+		
 		input[type="text"], input[type="number"] { padding: 5px; width: 100%; box-sizing: border-box; background: #ecf0f1; border: 1px solid #bdc3c7; border-radius: 3px; }
 		input[type="checkbox"] { transform: scale(1.2); }
 		input[type="color"] { width: 100%; height: 30px; border: none; padding: 0; cursor: pointer; }
@@ -289,14 +292,6 @@
 					<button id="btnRedo" class="secondary" disabled>Redo</button>
 				</div>
 				
-				<div class="control-group">
-					<label>Quick Snapping:</label>
-					<div class="control-row">
-						<label><input type="checkbox" id="chkSnapGrid"> Grid</label>
-						<label><input type="checkbox" id="chkSnapObj"> Objects</label>
-					</div>
-				</div>
-				
 				<!-- Added Reset Camera Button -->
 				<button id="btnResetCam" class="secondary" style="margin-bottom: 5px;">Reset Camera</button>
 				
@@ -322,6 +317,13 @@
 	
 	<!-- Floating Property Panel -->
 	<div id="properties-panel">
+		<!-- Gizmo Toolbar -->
+		<div class="prop-group" id="gizmo-toolbar" style="display: flex; gap: 5px; justify-content: center; border-bottom: 1px solid #34495e; padding-bottom: 10px; margin-bottom: 10px;">
+			<button id="btnGizmoPos" class="info active" title="Move (G)">Move</button>
+			<button id="btnGizmoRot" class="secondary" title="Rotate (R)">Rotate</button>
+			<button id="btnGizmoScale" class="secondary" title="Scale (S)">Scale</button>
+		</div>
+		
 		<!-- Lock Toggle (Global for single/multi) -->
 		<div class="prop-group">
 			<div class="prop-row" style="justify-content: flex-start;">
@@ -427,14 +429,6 @@
 			<div class="control-group">
 				<label>Canvas Background Color:</label>
 				<input type="color" id="settingBgColor" value="#2c3e50">
-			</div>
-			
-			<div class="control-group">
-				<label>Default Snapping:</label>
-				<div class="control-row">
-					<label><input type="checkbox" id="settingSnapGrid"> Snap to Grid</label>
-					<label><input type="checkbox" id="settingSnapObj"> Snap to Objects</label>
-				</div>
 			</div>
 			
 			<div class="control-group" style="margin-top: 10px; border-top: 1px solid #34495e; padding-top: 10px;">
