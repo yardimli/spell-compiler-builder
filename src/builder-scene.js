@@ -297,23 +297,30 @@ export class BuilderScene {
 				// Logic: Check if object is already in selection
 				const isAlreadySelected = this.objectManager.selectedMeshes.includes(mesh);
 				
+				// CHECK LOCKED STATUS
+				const objData = this.objectManager.placedObjects.find(o => o.id === mesh.metadata.id);
+				const isLocked = objData && objData.isLocked;
+				
 				if (isAlreadySelected && !isMultiSelect) {
 					// If already selected and no shift, we might be starting a drag
-					this.draggedMesh = mesh;
-					this.isDragging = true;
-					
-					// Calculate Offset
-					const groundPick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m) => m === this.groundMesh);
-					if (groundPick.hit) {
-						// Pass the ground point to startDrag to calculate offsets for ALL selected meshes
-						this.objectManager.startDrag(mesh, groundPick.pickedPoint);
+					// Only start drag if NOT locked
+					if (!isLocked) {
+						this.draggedMesh = mesh;
+						this.isDragging = true;
+						
+						// Calculate Offset
+						const groundPick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m) => m === this.groundMesh);
+						if (groundPick.hit) {
+							// Pass the ground point to startDrag to calculate offsets for ALL selected meshes
+							this.objectManager.startDrag(mesh, groundPick.pickedPoint);
+						}
 					}
 				} else {
 					// Select logic (handles toggle for multi-select inside manager)
 					this.objectManager.selectObject(mesh, isMultiSelect);
 					
-					// If we just selected it, we can also start dragging immediately
-					if (this.objectManager.selectedMeshes.includes(mesh)) {
+					// If we just selected it, we can also start dragging immediately (if not locked)
+					if (this.objectManager.selectedMeshes.includes(mesh) && !isLocked) {
 						this.draggedMesh = mesh;
 						this.isDragging = true;
 						const groundPick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m) => m === this.groundMesh);

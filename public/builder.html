@@ -157,6 +157,28 @@
 		
 		.modal-header { font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #34495e; padding-bottom: 10px; }
 		.modal-footer { margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px; }
+		
+		/* Context Menu */
+		#context-menu {
+			display: none;
+			position: absolute;
+			z-index: 1000;
+			width: 150px;
+			background: #2c3e50;
+			border: 1px solid #1a252f;
+			box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+			border-radius: 4px;
+			overflow: hidden;
+		}
+		.ctx-item {
+			padding: 8px 12px;
+			color: white;
+			font-size: 13px;
+			cursor: pointer;
+			border-bottom: 1px solid #34495e;
+		}
+		.ctx-item:hover { background: #34495e; }
+		.ctx-item:last-child { border-bottom: none; }
 	</style>
 </head>
 <body>
@@ -198,6 +220,14 @@
 	
 	<!-- Floating Property Panel -->
 	<div id="properties-panel">
+		<!-- Lock Toggle (Global for single/multi) -->
+		<div class="prop-group">
+			<div class="prop-row" style="justify-content: flex-start;">
+				<input type="checkbox" id="chkLock" style="width: auto; margin-right: 8px;">
+				<label for="chkLock" style="margin: 0; cursor: pointer; color: white;">Lock Object(s)</label>
+			</div>
+		</div>
+		
 		<!-- Single Object View -->
 		<div id="single-obj-props">
 			<div class="prop-group">
@@ -273,11 +303,23 @@
 				</div>
 			</div>
 			
+			<div class="control-group" style="margin-top: 10px; border-top: 1px solid #34495e; padding-top: 10px;">
+				<label style="color: #2ecc71;">Session:</label>
+				<div class="control-row">
+					<label><input type="checkbox" id="settingAutoSave" checked> Auto-Save Map (LocalStorage)</label>
+				</div>
+			</div>
+			
 			<div class="modal-footer">
 				<button id="btnCancelSettings" class="secondary">Cancel</button>
 				<button id="btnSaveSettings">Save & Apply</button>
 			</div>
 		</div>
+	</div>
+	
+	<!-- Custom Context Menu -->
+	<div id="context-menu">
+		<div class="ctx-item" id="ctx-add-grid">Add Grid of Objects...</div>
 	</div>
 </div>
 </body>

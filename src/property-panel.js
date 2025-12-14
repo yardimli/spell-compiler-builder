@@ -19,6 +19,7 @@ export class PropertyPanel {
 		
 		this.inputs = {
 			name: getEl('propName'),
+			lock: getEl('chkLock'), // New Lock Checkbox
 			pos: {
 				x: getEl('posX'),
 				y: getEl('posY'),
@@ -56,6 +57,20 @@ export class PropertyPanel {
 				this.objectManager.updateObjectProperty(this.currentObjectId, 'name', e.target.value);
 			}
 		};
+		
+		// Lock Toggle
+		if (this.inputs.lock) {
+			this.inputs.lock.onchange = (e) => {
+				const isLocked = e.target.checked;
+				if (this.currentObjectId) {
+					// Single
+					this.objectManager.updateObjectProperty(this.currentObjectId, 'isLocked', isLocked);
+				} else {
+					// Multi
+					this.objectManager.updateMultipleObjectsProperty('isLocked', isLocked);
+				}
+			};
+		}
 		
 		// Position
 		['x', 'y', 'z'].forEach(axis => {
@@ -122,6 +137,12 @@ export class PropertyPanel {
 			
 			if (this.inputs.name) this.inputs.name.value = data.name || '';
 			
+			// Lock State
+			if (this.inputs.lock) {
+				this.inputs.lock.checked = !!data.isLocked;
+				this.inputs.lock.indeterminate = false;
+			}
+			
 			// Position
 			if (this.inputs.pos.x) this.inputs.pos.x.value = parseFloat(data.position[0]).toFixed(2);
 			if (this.inputs.pos.y) this.inputs.pos.y.value = parseFloat(data.position[1]).toFixed(2);
@@ -146,12 +167,28 @@ export class PropertyPanel {
 			
 			this.currentObjectId = null;
 			
+			// Determine Lock State (Mixed?)
+			if (this.inputs.lock) {
+				const allLocked = dataArray.every(d => d.isLocked);
+				const allUnlocked = dataArray.every(d => !d.isLocked);
+				
+				if (allLocked) {
+					this.inputs.lock.checked = true;
+					this.inputs.lock.indeterminate = false;
+				} else if (allUnlocked) {
+					this.inputs.lock.checked = false;
+					this.inputs.lock.indeterminate = false;
+				} else {
+					this.inputs.lock.indeterminate = true;
+				}
+			}
+			
 			// Populate List
 			this.multiList.innerHTML = '';
 			dataArray.forEach(obj => {
 				const div = document.createElement('div');
 				div.className = 'multi-select-item';
-				div.innerText = obj.name;
+				div.innerText = obj.name + (obj.isLocked ? ' (Locked)' : '');
 				this.multiList.appendChild(div);
 			});
 		}

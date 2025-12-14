@@ -14,7 +14,8 @@
 - add property panel for lights to adjust color diffuse and specular for all 3 types and groundColor for HemisphericLight
 - add property panel for lights to adjust location for Pointlight
 - add property panel for lights to adjust direction for DirectionalLight and HemisphericLight
-
+- show different simple 3d representations for each light type
+- a new scene should have a default light (HemisphericLight)
 
 - allow enabling disabling skybox (implement in global settings modal)
 var createScene = function () {
@@ -43,6 +44,9 @@ export default createScene
 
 #TODO 8
 
+- the thumbnails created for the objects have too much padding around them reduce the padding so the objects are larger in the thumbnail
+
+#TODO 9
 - add object grouping functionality, allow user to group multiple selected objects into a single group (add group button in property panel when multiple objects are selected)
 - only allow one level of grouping (no nested groups)
 - add a object tree view that can be turned on/off it will use absolute positioning on the right side of the screen to show all objects and groups in a hierarchical view.

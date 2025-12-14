@@ -17,7 +17,8 @@ export class BuilderUI {
 			gridColor: '#555555',
 			bgColor: '#2c3e50',
 			snapGrid: false,
-			snapObj: true
+			snapObj: true,
+			autoSave: true // Default enabled
 		};
 		
 		// Ensure manager exists before creating panel
@@ -32,10 +33,16 @@ export class BuilderUI {
 		this.loadSettings(); // Load from LocalStorage
 		this.applySettings(); // Apply to Scene/Manager
 		
+		// Load auto-saved map if enabled and exists
+		if (this.globalSettings.autoSave) {
+			this.manager.loadFromAutoSave();
+		}
+		
 		this.buildSidebar(assets);
 		this.setupControls();
 		this.setupHistoryUI();
 		this.setupSettingsModal();
+		this.setupContextMenu();
 	}
 	
 	// --- LocalStorage Logic ---
@@ -61,6 +68,7 @@ export class BuilderUI {
 		this.manager.gridSize = parseFloat(this.globalSettings.gridSize);
 		this.manager.snapToGrid = this.globalSettings.snapGrid;
 		this.manager.snapToObjects = this.globalSettings.snapObj;
+		this.manager.autoSaveEnabled = this.globalSettings.autoSave;
 		
 		// Apply to Scene
 		this.scene.setGridColors(this.globalSettings.gridColor, this.globalSettings.bgColor);
@@ -108,8 +116,6 @@ export class BuilderUI {
 			grid.className = 'category-grid';
 			
 			// Check state (Default to Collapsed if not found in LS, or if LS says so)
-			// Requirement: "all categories should be collapsed by default"
-			// If key exists in LS, use it. If not, default to true (collapsed).
 			const isCollapsed = sidebarState[categoryName] !== undefined ? sidebarState[categoryName] : true;
 			
 			if (isCollapsed) {
@@ -131,6 +137,7 @@ export class BuilderUI {
 			categories[categoryName].forEach(asset => {
 				const div = document.createElement('div');
 				div.className = 'asset-item';
+				div.dataset.file = asset.file; // Store filename for context menu
 				
 				const img = document.createElement('img');
 				img.className = 'asset-thumb';
@@ -241,6 +248,7 @@ export class BuilderUI {
 		const inBgColor = document.getElementById('settingBgColor');
 		const inSnapGrid = document.getElementById('settingSnapGrid');
 		const inSnapObj = document.getElementById('settingSnapObj');
+		const inAutoSave = document.getElementById('settingAutoSave');
 		
 		btnOpen.onclick = () => {
 			// Populate fields with current settings
@@ -250,6 +258,7 @@ export class BuilderUI {
 			inBgColor.value = this.globalSettings.bgColor;
 			inSnapGrid.checked = this.globalSettings.snapGrid;
 			inSnapObj.checked = this.globalSettings.snapObj;
+			inAutoSave.checked = this.globalSettings.autoSave;
 			
 			modal.style.display = 'flex';
 		};
@@ -266,6 +275,7 @@ export class BuilderUI {
 			this.globalSettings.bgColor = inBgColor.value;
 			this.globalSettings.snapGrid = inSnapGrid.checked;
 			this.globalSettings.snapObj = inSnapObj.checked;
+			this.globalSettings.autoSave = inAutoSave.checked;
 			
 			this.saveSettings();
 			this.applySettings();
@@ -275,6 +285,47 @@ export class BuilderUI {
 		// Close on outside click
 		window.onclick = (event) => {
 			if (event.target === modal) close();
+		};
+	}
+	
+	setupContextMenu () {
+		const menu = document.getElementById('context-menu');
+		const gridItem = document.getElementById('ctx-add-grid');
+		let targetFile = null;
+		
+		// Attach event listener to sidebar (delegate)
+		const sidebar = document.getElementById('asset-list');
+		sidebar.addEventListener('contextmenu', (e) => {
+			const assetItem = e.target.closest('.asset-item');
+			if (assetItem) {
+				e.preventDefault();
+				targetFile = assetItem.dataset.file;
+				
+				// Position menu
+				menu.style.display = 'block';
+				menu.style.left = e.pageX + 'px';
+				menu.style.top = e.pageY + 'px';
+			}
+		});
+		
+		// Hide menu on click elsewhere
+		window.addEventListener('click', () => {
+			menu.style.display = 'none';
+		});
+		
+		// Menu Item Action
+		gridItem.onclick = () => {
+			if (targetFile) {
+				const rows = prompt("Enter number of rows:", "3");
+				const cols = prompt("Enter number of columns:", "3");
+				
+				const r = parseInt(rows);
+				const c = parseInt(cols);
+				
+				if (!isNaN(r) && !isNaN(c) && r > 0 && c > 0) {
+					this.manager.addAssetGrid(targetFile, this.scene.selectedCellPosition, r, c);
+				}
+			}
 		};
 	}
 	

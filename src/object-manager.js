@@ -2,6 +2,7 @@ import * as BABYLON from '@babylonjs/core';
 import { UndoRedoManager } from './undo-redo';
 
 const ASSET_FOLDER = './assets/nature/';
+const LS_AUTOSAVE_KEY = 'builder_autosave_map';
 
 export class ObjectManager {
 	constructor (scene, shadowGenerator) {
@@ -17,9 +18,17 @@ export class ObjectManager {
 		this.snapToObjects = true;
 		this.gridSize = 2.5;
 		this.defaultYOffset = 0; // New setting for Y offset
+		this.autoSaveEnabled = true;
 		
 		// Initialize Undo/Redo Manager
 		this.undoRedo = new UndoRedoManager(this);
+		
+		// Hook into history change for auto-save
+		const originalOnHistoryChange = this.undoRedo.onHistoryChange;
+		this.undoRedo.onHistoryChange = () => {
+			if (originalOnHistoryChange) originalOnHistoryChange();
+			this.saveToAutoSave();
+		};
 		
 		// Events
 		this.onSelectionChange = null; // Callback for UI
@@ -33,6 +42,15 @@ export class ObjectManager {
 	
 	async addAsset (filename, position) {
 		try {
+			// STACKING LOGIC: Check if a single object is selected to stack on top
+			let stackHeight = 0;
+			if (this.selectedMeshes.length === 1) {
+				const baseMesh = this.selectedMeshes[0];
+				// Calculate world max Y of the base mesh
+				const bounds = baseMesh.getHierarchyBoundingVectors();
+				stackHeight = bounds.max.y;
+			}
+			
 			const id = BABYLON.Tools.RandomId();
 			
 			// Generate Unique Name: filename_1, filename_2, etc.
@@ -53,13 +71,17 @@ export class ObjectManager {
 			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_FOLDER, filename, this.scene);
 			const root = result.meshes[0];
 			
-			// Normalize position based on bounds
+			// Normalize position based on bounds (pivot adjustment)
 			const bounds = root.getHierarchyBoundingVectors();
 			const heightOffset = -bounds.min.y;
 			
 			root.name = uniqueName;
-			// Apply default Y offset from settings here
-			root.position = new BABYLON.Vector3(position.x, position.y + heightOffset + this.defaultYOffset, position.z);
+			
+			// Apply position: Cursor/Grid pos + Pivot Offset + Default Offset + Stacking Height
+			// If stacking, we use the stackHeight as base Y. If not, we use position.y (usually 0)
+			const baseY = (this.selectedMeshes.length === 1) ? stackHeight : position.y;
+			
+			root.position = new BABYLON.Vector3(position.x, baseY + heightOffset + this.defaultYOffset, position.z);
 			root.metadata = { id: id, isObject: true, file: filename };
 			
 			result.meshes.forEach(m => {
@@ -74,6 +96,7 @@ export class ObjectManager {
 				name: uniqueName,
 				file: filename,
 				type: 'mesh',
+				isLocked: false,
 				position: root.position.asArray(),
 				rotation: root.rotationQuaternion ? root.rotationQuaternion.toEulerAngles().asArray() : root.rotation.asArray(),
 				scaling: root.scaling.asArray()
@@ -87,6 +110,110 @@ export class ObjectManager {
 			
 		} catch (err) {
 			console.error('Error adding asset:', err);
+		}
+	}
+	
+	async addAssetGrid (filename, position, rows, cols) {
+		try {
+			// 1. Load the first one to measure it
+			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_FOLDER, filename, this.scene);
+			const root = result.meshes[0];
+			
+			// Calculate bounds for tight packing
+			const bounds = root.getHierarchyBoundingVectors();
+			const width = bounds.max.x - bounds.min.x;
+			const depth = bounds.max.z - bounds.min.z;
+			const heightOffset = -bounds.min.y;
+			
+			// We will instantiate/clone this for the grid
+			// But first, let's set up the first one properly or just use it as a template and dispose it?
+			// Let's use it as the first item (0,0)
+			
+			const addedObjectsData = [];
+			const baseName = filename.replace(/\.glb$/i, '');
+			
+			// Start position (Top-Left of the grid centered at cursor)
+			const startX = position.x - (width * cols) / 2 + width / 2;
+			const startZ = position.z - (depth * rows) / 2 + depth / 2;
+			
+			// Helper to setup mesh
+			const setupMesh = (mesh, r, c) => {
+				const id = BABYLON.Tools.RandomId();
+				// Unique name
+				const existingCount = this.placedObjects.filter(o => o.name && o.name.startsWith(baseName)).length + addedObjectsData.length;
+				const uniqueName = `${baseName}_${existingCount + 1}`;
+				
+				mesh.name = uniqueName;
+				mesh.position = new BABYLON.Vector3(
+					startX + c * width,
+					position.y + heightOffset + this.defaultYOffset,
+					startZ + r * depth
+				);
+				
+				mesh.metadata = { id: id, isObject: true, file: filename };
+				
+				// Ensure shadows/pickable
+				mesh.getChildMeshes(false).forEach(m => {
+					this.shadowGenerator.addShadowCaster(m, true);
+					m.receiveShadows = true;
+					m.isPickable = true;
+				});
+				
+				const objData = {
+					id: id,
+					name: uniqueName,
+					file: filename,
+					type: 'mesh',
+					isLocked: false,
+					position: mesh.position.asArray(),
+					rotation: mesh.rotationQuaternion ? mesh.rotationQuaternion.toEulerAngles().asArray() : mesh.rotation.asArray(),
+					scaling: mesh.scaling.asArray()
+				};
+				
+				this.placedObjects.push(objData);
+				addedObjectsData.push(objData);
+				return mesh;
+			};
+			
+			// Setup (0,0) - The one we loaded
+			setupMesh(root, 0, 0);
+			
+			// Loop for the rest
+			for (let r = 0; r < rows; r++) {
+				for (let c = 0; c < cols; c++) {
+					if (r === 0 && c === 0) continue; // Skip the first one
+					
+					// Instantiate (lighter weight) or Clone
+					// InstantiateHierarchy is good for GLTF
+					const newRoot = root.instantiateHierarchy();
+					// Note: instantiateHierarchy creates a new root but shares geometry.
+					// We need to ensure metadata is set on the new root.
+					
+					// However, instantiateHierarchy returns a TransformNode usually, or the root mesh.
+					// Let's use simple cloning for safety with the existing logic
+					// const newRoot = root.clone(`${baseName}_r${r}_c${c}`);
+					// Cloning GLTF roots can be tricky in Babylon sometimes if not handled right,
+					// but ImportMeshAsync result usually works.
+					
+					// Let's use InstantiateHierarchy for performance if possible, but fallback to clone
+					// Actually, let's just use ImportMeshAsync in a loop? No, too slow.
+					// Clone is best.
+					const clone = root.clone();
+					setupMesh(clone, r, c);
+				}
+			}
+			
+			// Select all new objects
+			this.selectedMeshes = [];
+			addedObjectsData.forEach(d => {
+				const m = this.findMeshById(d.id);
+				if (m) this.selectObject(m, true);
+			});
+			
+			this.undoRedo.add({ type: 'ADD', data: addedObjectsData });
+			
+		} catch (e) {
+			console.error("Grid spawn error:", e);
 		}
 	}
 	
@@ -110,6 +237,7 @@ export class ObjectManager {
 			id: id,
 			name: name,
 			type: 'light',
+			isLocked: false,
 			position: light.position.asArray(),
 			rotation: [0, 0, 0],
 			scaling: [1, 1, 1]
@@ -132,17 +260,32 @@ export class ObjectManager {
 		meshesToDelete.forEach(mesh => {
 			const id = mesh.metadata.id;
 			const objData = this.placedObjects.find(o => o.id === id);
-			if (objData) {
+			
+			// CHECK LOCKED STATUS
+			if (objData && !objData.isLocked) {
 				deletedData.push(objData);
 				deletedIds.push(id);
 				this.removeObjectById(id, false); // Don't clear selection yet
 			}
 		});
 		
-		this.selectedMeshes = []; // Clear selection manually
-		this.undoRedo.add({ type: 'DELETE', data: deletedData });
+		// Update selection array to remove deleted ones
+		this.selectedMeshes = this.selectedMeshes.filter(m => !deletedIds.includes(m.metadata.id));
 		
-		if (this.onSelectionChange) this.onSelectionChange(null);
+		// If anything was deleted, add to history
+		if (deletedData.length > 0) {
+			this.undoRedo.add({ type: 'DELETE', data: deletedData });
+		}
+		
+		// Update UI
+		if (this.onSelectionChange) {
+			if (this.selectedMeshes.length > 0) {
+				const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
+				this.onSelectionChange(selectedData);
+			} else {
+				this.onSelectionChange(null);
+			}
+		}
 	}
 	
 	duplicateSelection () {
@@ -207,6 +350,7 @@ export class ObjectManager {
 				name: newName,
 				type: originalData.type || 'mesh',
 				file: originalData.file,
+				isLocked: false, // Copies are unlocked by default
 				position: newRoot.position.asArray(),
 				rotation: newRoot.rotationQuaternion ? newRoot.rotationQuaternion.toEulerAngles().asArray() : newRoot.rotation.asArray(),
 				scaling: newRoot.scaling.asArray()
@@ -550,14 +694,23 @@ export class ObjectManager {
 		const mesh = this.findMeshById(id);
 		if (!mesh) return;
 		
+		const objData = this.placedObjects.find(o => o.id === id);
+		
+		// Handle Locking
+		if (prop === 'isLocked') {
+			objData.isLocked = value;
+			// No history for locking? Or should we? Let's skip history for lock state for now as it's a meta-property
+			// But we should trigger auto-save
+			this.saveToAutoSave();
+			return;
+		}
+		
 		// Capture state for undo
 		const oldData = {
 			position: mesh.position.asArray(),
 			rotation: mesh.rotation.asArray(),
 			scaling: mesh.scaling.asArray()
 		};
-		
-		const objData = this.placedObjects.find(o => o.id === id);
 		
 		if (prop === 'name') {
 			mesh.name = value;
@@ -596,6 +749,17 @@ export class ObjectManager {
 				newData: newData
 			}]
 		});
+	}
+	
+	// Update property for multiple objects (specifically for locking)
+	updateMultipleObjectsProperty(prop, value) {
+		if (prop === 'isLocked') {
+			this.selectedMeshes.forEach(mesh => {
+				const objData = this.placedObjects.find(o => o.id === mesh.metadata.id);
+				if (objData) objData.isLocked = value;
+			});
+			this.saveToAutoSave();
+		}
 	}
 	
 	// --- NEW: Method required by UndoRedoManager ---
@@ -651,6 +815,26 @@ export class ObjectManager {
 		
 		if (data.assets) {
 			data.assets.forEach(item => this.restoreObject(item));
+		}
+	}
+	
+	// Auto-Save Logic
+	saveToAutoSave() {
+		if (!this.autoSaveEnabled) return;
+		const data = this.getMapData('autosave');
+		localStorage.setItem(LS_AUTOSAVE_KEY, JSON.stringify(data));
+	}
+	
+	loadFromAutoSave() {
+		const saved = localStorage.getItem(LS_AUTOSAVE_KEY);
+		if (saved) {
+			try {
+				const data = JSON.parse(saved);
+				console.log("Restoring auto-saved map...");
+				this.loadMapData(data);
+			} catch (e) {
+				console.error("Failed to load auto-save", e);
+			}
 		}
 	}
 }
