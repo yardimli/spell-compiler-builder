@@ -113,6 +113,21 @@
 		.prop-row { display: flex; gap: 5px; margin-bottom: 5px; align-items: center; }
 		.prop-row span { width: 15px; text-align: center; color: #95a5a6; }
 		
+		/* Multi-select List Styles */
+		#multi-select-container {
+			max-height: 200px;
+			overflow-y: auto;
+			margin-bottom: 15px;
+			border: 1px solid #34495e;
+			background: #233342;
+		}
+		.multi-select-item {
+			padding: 5px 8px;
+			border-bottom: 1px solid #2c3e50;
+			font-size: 12px;
+		}
+		.multi-select-item:last-child { border-bottom: none; }
+		
 		#renderCanvas { flex: 1; outline: none; touch-action: none; cursor: crosshair; }
 		#fileInput { display: none; }
 		
@@ -149,7 +164,6 @@
 	<!-- Left Sidebar -->
 	<div id="sidebar">
 		<div id="sidebar-header">Map Builder Assets</div>
-		<!-- Renamed id to be more generic as it contains categories now -->
 		<div id="asset-list"></div>
 		<div id="controls">
 			<div class="control-row">
@@ -157,9 +171,6 @@
 				<button id="btnRedo" class="secondary" disabled>Redo</button>
 			</div>
 			
-			<!-- Snapping controls moved to global settings, but kept quick toggles here if needed,
-                 though request implies they are part of global settings.
-                 We will keep quick toggles but sync them with global settings. -->
 			<div class="control-group">
 				<label>Quick Snapping:</label>
 				<div class="control-row">
@@ -187,33 +198,45 @@
 	
 	<!-- Floating Property Panel -->
 	<div id="properties-panel">
-		<div class="prop-group">
-			<label>Name</label>
-			<input type="text" id="propName">
+		<!-- Single Object View -->
+		<div id="single-obj-props">
+			<div class="prop-group">
+				<label>Name</label>
+				<input type="text" id="propName">
+			</div>
+			
+			<div class="prop-group">
+				<label>Position</label>
+				<div class="prop-row"><span>X</span><input type="number" id="posX" step="0.1"></div>
+				<div class="prop-row"><span>Y</span><input type="number" id="posY" step="0.1"></div>
+				<div class="prop-row"><span>Z</span><input type="number" id="posZ" step="0.1"></div>
+			</div>
+			
+			<div class="prop-group">
+				<label>Rotation (Degrees)</label>
+				<div class="prop-row"><span>X</span><input type="number" id="rotX" step="15"></div>
+				<div class="prop-row"><span>Y</span><input type="number" id="rotY" step="15"></div>
+				<div class="prop-row"><span>Z</span><input type="number" id="rotZ" step="15"></div>
+			</div>
+			
+			<div class="prop-group">
+				<label>Scale</label>
+				<div class="prop-row"><span>X</span><input type="number" id="scaleX" step="0.1"></div>
+				<div class="prop-row"><span>Y</span><input type="number" id="scaleY" step="0.1"></div>
+				<div class="prop-row"><span>Z</span><input type="number" id="scaleZ" step="0.1"></div>
+			</div>
 		</div>
 		
-		<div class="prop-group">
-			<label>Position</label>
-			<div class="prop-row"><span>X</span><input type="number" id="posX" step="0.1"></div>
-			<div class="prop-row"><span>Y</span><input type="number" id="posY" step="0.1"></div>
-			<div class="prop-row"><span>Z</span><input type="number" id="posZ" step="0.1"></div>
+		<!-- Multi Object View -->
+		<div id="multi-obj-props" style="display: none;">
+			<div class="prop-group">
+				<label>Selected Objects</label>
+				<div id="multi-select-container"></div>
+			</div>
+			<button id="btnDuplicate" class="info" style="margin-bottom: 10px;">Duplicate Selected</button>
 		</div>
 		
-		<div class="prop-group">
-			<label>Rotation (Degrees)</label>
-			<div class="prop-row"><span>X</span><input type="number" id="rotX" step="15"></div>
-			<div class="prop-row"><span>Y</span><input type="number" id="rotY" step="15"></div>
-			<div class="prop-row"><span>Z</span><input type="number" id="rotZ" step="15"></div>
-		</div>
-		
-		<div class="prop-group">
-			<label>Scale</label>
-			<div class="prop-row"><span>X</span><input type="number" id="scaleX" step="0.1"></div>
-			<div class="prop-row"><span>Y</span><input type="number" id="scaleY" step="0.1"></div>
-			<div class="prop-row"><span>Z</span><input type="number" id="scaleZ" step="0.1"></div>
-		</div>
-		
-		<button id="btnDeleteObj" class="danger">Delete Object</button>
+		<button id="btnDeleteObj" class="danger">Delete Object(s)</button>
 	</div>
 	
 	<!-- Global Settings Modal -->

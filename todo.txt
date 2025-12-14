@@ -16,6 +16,10 @@
 - when adding new objects if an object is already selected add the new object on top of the selected object
 - allow user to lock existing objects so they cant be moved or deleted (in property panel add a lock toggle)
 - save current map to local storage so it persists between sessions
+- allow to add a grid of objects, when adding right click on the objects sidebar add an option to add a grid of objects (specify rows and columns)
+
+#TODO 7
+
 - add lighting buttons to the UI to toggle different light setups (daylight, night, indoor)
 - allow loading skybox textures from local files for the canvas background (implement in global settings modal)
 

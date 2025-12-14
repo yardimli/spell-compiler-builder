@@ -5,6 +5,11 @@ export class PropertyPanel {
 		this.objectManager = objectManager;
 		this.panel = document.getElementById('properties-panel');
 		
+		// Containers
+		this.singleView = document.getElementById('single-obj-props');
+		this.multiView = document.getElementById('multi-obj-props');
+		this.multiList = document.getElementById('multi-select-container');
+		
 		// Cache inputs with safety check
 		const getEl = (id) => {
 			const el = document.getElementById(id);
@@ -66,6 +71,14 @@ export class PropertyPanel {
 				this.objectManager.deleteSelected();
 			};
 		}
+		
+		// Duplicate
+		const btnDuplicate = document.getElementById('btnDuplicate');
+		if (btnDuplicate) {
+			btnDuplicate.onclick = () => {
+				this.objectManager.duplicateSelection();
+			};
+		}
 	}
 	
 	emitTransformChange (type) {
@@ -87,16 +100,21 @@ export class PropertyPanel {
 		this.objectManager.updateObjectProperty(this.currentObjectId, type, values);
 	}
 	
-	updateUI (data) {
+	updateUI (dataArray) {
 		if (!this.panel) return;
 		
 		this.isUpdatingUI = true;
 		
-		if (!data) {
+		if (!dataArray || dataArray.length === 0) {
 			this.panel.style.display = 'none';
 			this.currentObjectId = null;
-		} else {
+		} else if (dataArray.length === 1) {
+			// SINGLE SELECTION
 			this.panel.style.display = 'flex';
+			this.singleView.style.display = 'block';
+			this.multiView.style.display = 'none';
+			
+			const data = dataArray[0];
 			this.currentObjectId = data.id;
 			
 			if (this.inputs.name) this.inputs.name.value = data.name || '';
@@ -115,6 +133,22 @@ export class PropertyPanel {
 			if (this.inputs.scale.x) this.inputs.scale.x.value = parseFloat(data.scaling[0]).toFixed(2);
 			if (this.inputs.scale.y) this.inputs.scale.y.value = parseFloat(data.scaling[1]).toFixed(2);
 			if (this.inputs.scale.z) this.inputs.scale.z.value = parseFloat(data.scaling[2]).toFixed(2);
+		} else {
+			// MULTI SELECTION
+			this.panel.style.display = 'flex';
+			this.singleView.style.display = 'none';
+			this.multiView.style.display = 'block';
+			
+			this.currentObjectId = null;
+			
+			// Populate List
+			this.multiList.innerHTML = '';
+			dataArray.forEach(obj => {
+				const div = document.createElement('div');
+				div.className = 'multi-select-item';
+				div.innerText = obj.name;
+				this.multiList.appendChild(div);
+			});
 		}
 		
 		this.isUpdatingUI = false;

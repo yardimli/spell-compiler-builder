@@ -24,6 +24,9 @@ export class BuilderScene {
 		// Visual Settings Defaults
 		this.gridColor = '#555555';
 		this.gridBgColor = '#2c3e50';
+		
+		// Input State
+		this.isCtrlDown = false;
 	}
 	
 	async init () {
@@ -40,7 +43,7 @@ export class BuilderScene {
 		
 		// 3. Camera
 		this.camera = new BABYLON.ArcRotateCamera('EditorCamera', -Math.PI / 2, Math.PI / 3, 50, BABYLON.Vector3.Zero(), this.scene);
-		this.camera.attachControl(this.canvas, true);
+		// Don't attach control immediately, wait for Ctrl key logic
 		this.camera.wheelPrecision = 50;
 		this.camera.panningSensibility = 50;
 		this.camera.lowerRadiusLimit = 2;
@@ -66,6 +69,7 @@ export class BuilderScene {
 		
 		// 7. Interaction
 		this.setupInteraction();
+		this.setupKeyboardControls();
 		
 		// 8. Render Loop
 		this.engine.runRenderLoop(() => {
@@ -193,6 +197,28 @@ export class BuilderScene {
 		this.cursorMesh.position.set(x, 0.05, z);
 	}
 	
+	setupKeyboardControls () {
+		// Toggle Camera controls based on Ctrl key
+		window.addEventListener('keydown', (e) => {
+			if (e.key === 'Control' && !this.isCtrlDown) {
+				this.isCtrlDown = true;
+				// Attach camera controls only when Ctrl is pressed
+				this.camera.attachControl(this.canvas, true);
+			}
+		});
+		
+		window.addEventListener('keyup', (e) => {
+			if (e.key === 'Control') {
+				this.isCtrlDown = false;
+				// Detach camera controls when Ctrl is released
+				this.camera.detachControl();
+			}
+		});
+		
+		// Ensure camera is detached initially
+		this.camera.detachControl();
+	}
+	
 	setupInteraction () {
 		this.scene.onPointerObservable.add((pointerInfo) => {
 			switch (pointerInfo.type) {
@@ -214,12 +240,16 @@ export class BuilderScene {
 	
 	handlePointerDown (info) {
 		const pick = info.pickInfo;
+		const isMultiSelect = info.event.shiftKey;
 		
 		if (pick.hit) {
 			// 1. Handle Grid Click (Deselect)
 			if (pick.pickedMesh === this.groundMesh) {
 				this.updateCursorPosition(pick.pickedPoint);
-				this.objectManager.selectObject(null);
+				// If clicking grid without shift, deselect all
+				if (!isMultiSelect) {
+					this.objectManager.selectObject(null, false);
+				}
 				return;
 			}
 			
@@ -231,23 +261,33 @@ export class BuilderScene {
 			}
 			
 			if (mesh && mesh.metadata && mesh.metadata.isObject) {
-				// Logic: Only start dragging if the object is ALREADY selected.
-				// Otherwise, just select it.
-				if (this.objectManager.selectedMesh === mesh) {
+				// Logic: Check if object is already in selection
+				const isAlreadySelected = this.objectManager.selectedMeshes.includes(mesh);
+				
+				if (isAlreadySelected && !isMultiSelect) {
+					// If already selected and no shift, we might be starting a drag
 					this.draggedMesh = mesh;
 					this.isDragging = true;
-					this.camera.detachControl();
 					
 					// Calculate Offset
 					const groundPick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m) => m === this.groundMesh);
 					if (groundPick.hit) {
-						this.dragOffset = mesh.position.subtract(groundPick.pickedPoint);
-						this.dragOffset.y = 0;
+						// Pass the ground point to startDrag to calculate offsets for ALL selected meshes
+						this.objectManager.startDrag(mesh, groundPick.pickedPoint);
 					}
-					
-					this.objectManager.startDrag(mesh);
 				} else {
-					this.objectManager.selectObject(mesh);
+					// Select logic (handles toggle for multi-select inside manager)
+					this.objectManager.selectObject(mesh, isMultiSelect);
+					
+					// If we just selected it, we can also start dragging immediately
+					if (this.objectManager.selectedMeshes.includes(mesh)) {
+						this.draggedMesh = mesh;
+						this.isDragging = true;
+						const groundPick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m) => m === this.groundMesh);
+						if (groundPick.hit) {
+							this.objectManager.startDrag(mesh, groundPick.pickedPoint);
+						}
+					}
 				}
 			}
 		}
@@ -257,9 +297,8 @@ export class BuilderScene {
 		if (this.isDragging && this.draggedMesh) {
 			const groundPick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m) => m === this.groundMesh);
 			if (groundPick.hit) {
-				const targetPos = groundPick.pickedPoint.add(this.dragOffset);
-				targetPos.y = this.draggedMesh.position.y;
-				this.objectManager.handleDrag(this.draggedMesh, targetPos);
+				// Pass the ground point. The manager calculates the new position based on offsets.
+				this.objectManager.handleDrag(this.draggedMesh, groundPick.pickedPoint);
 			}
 		}
 	}
@@ -269,7 +308,6 @@ export class BuilderScene {
 			this.objectManager.endDrag(this.draggedMesh);
 			this.isDragging = false;
 			this.draggedMesh = null;
-			this.camera.attachControl(this.canvas, true);
 		}
 	}
 	

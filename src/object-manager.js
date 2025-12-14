@@ -10,7 +10,7 @@ export class ObjectManager {
 		
 		// State
 		this.placedObjects = []; // Array of metadata objects
-		this.selectedMesh = null;
+		this.selectedMeshes = []; // Array of currently selected Babylon Meshes
 		
 		// Settings (Defaults as requested: Grid Snap OFF, Object Snap ON)
 		this.snapToGrid = false;
@@ -23,6 +23,10 @@ export class ObjectManager {
 		
 		// Events
 		this.onSelectionChange = null; // Callback for UI
+		
+		// Drag State
+		this.dragStartData = null; // Stores initial state of all selected objects
+		this.dragStartOffsets = new Map(); // Stores offset of each mesh relative to the drag anchor
 	}
 	
 	// --- Object Management ---
@@ -76,10 +80,10 @@ export class ObjectManager {
 			};
 			
 			this.placedObjects.push(objData);
-			this.selectObject(root);
+			this.selectObject(root, false);
 			
 			// Add to history via new manager
-			this.undoRedo.add({ type: 'ADD', data: objData });
+			this.undoRedo.add({ type: 'ADD', data: [objData] });
 			
 		} catch (err) {
 			console.error('Error adding asset:', err);
@@ -112,27 +116,136 @@ export class ObjectManager {
 		};
 		
 		this.placedObjects.push(objData);
-		this.selectObject(light);
-		this.undoRedo.add({ type: 'ADD', data: objData });
+		this.selectObject(light, false);
+		this.undoRedo.add({ type: 'ADD', data: [objData] });
 	}
 	
 	deleteSelected () {
-		if (!this.selectedMesh) return;
+		if (this.selectedMeshes.length === 0) return;
 		
-		const id = this.selectedMesh.metadata.id;
-		const objData = this.placedObjects.find(o => o.id === id);
+		const deletedData = [];
+		const deletedIds = [];
 		
-		if (objData) {
-			this.undoRedo.add({ type: 'DELETE', id: id, data: objData });
-			this.removeObjectById(id, true);
-		}
+		// Create a copy of the array to iterate safely while modifying selection
+		const meshesToDelete = [...this.selectedMeshes];
+		
+		meshesToDelete.forEach(mesh => {
+			const id = mesh.metadata.id;
+			const objData = this.placedObjects.find(o => o.id === id);
+			if (objData) {
+				deletedData.push(objData);
+				deletedIds.push(id);
+				this.removeObjectById(id, false); // Don't clear selection yet
+			}
+		});
+		
+		this.selectedMeshes = []; // Clear selection manually
+		this.undoRedo.add({ type: 'DELETE', data: deletedData });
+		
+		if (this.onSelectionChange) this.onSelectionChange(null);
+	}
+	
+	duplicateSelection () {
+		if (this.selectedMeshes.length === 0) return;
+		
+		const newObjectsData = [];
+		const newMeshes = [];
+		
+		// 1. Deselect current (visual only)
+		this.selectedMeshes.forEach(m => this.setSelectionHighlight(m, false));
+		
+		// 2. Clone Loop
+		const promises = this.selectedMeshes.map(async (originalMesh) => {
+			const originalData = this.placedObjects.find(o => o.id === originalMesh.metadata.id);
+			if (!originalData) return;
+			
+			const newId = BABYLON.Tools.RandomId();
+			// Create unique name
+			const baseName = originalData.name.split('_')[0];
+			const newName = `${baseName}_copy_${Math.floor(Math.random() * 1000)}`;
+			
+			// Offset position slightly
+			const newPos = originalMesh.position.clone().add(new BABYLON.Vector3(2, 0, 2));
+			
+			let newRoot;
+			
+			if (originalData.type === 'light') {
+				const light = new BABYLON.PointLight(newName, newPos, this.scene);
+				light.intensity = 0.5;
+				light.metadata = { id: newId, isObject: true, type: 'light' };
+				
+				const sphere = BABYLON.MeshBuilder.CreateSphere(newName + '_gizmo', { diameter: 0.5 }, this.scene);
+				sphere.position = light.position;
+				sphere.material = new BABYLON.StandardMaterial('lm', this.scene);
+				sphere.material.emissiveColor = new BABYLON.Color3(1, 1, 0);
+				sphere.setParent(light);
+				sphere.isPickable = true;
+				newRoot = light;
+			} else {
+				// Clone Mesh
+				// Using ImportMeshAsync again ensures a clean separate instance
+				const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_FOLDER, originalData.file, this.scene);
+				newRoot = result.meshes[0];
+				newRoot.name = newName;
+				newRoot.position = newPos;
+				newRoot.rotation = originalMesh.rotation.clone();
+				if (originalMesh.rotationQuaternion) newRoot.rotationQuaternion = originalMesh.rotationQuaternion.clone();
+				newRoot.scaling = originalMesh.scaling.clone();
+				
+				newRoot.metadata = { id: newId, isObject: true, file: originalData.file };
+				
+				result.meshes.forEach(m => {
+					this.shadowGenerator.addShadowCaster(m, true);
+					m.receiveShadows = true;
+					m.isPickable = true;
+					if (m !== newRoot) m.parent = newRoot;
+				});
+			}
+			
+			const newData = {
+				id: newId,
+				name: newName,
+				type: originalData.type || 'mesh',
+				file: originalData.file,
+				position: newRoot.position.asArray(),
+				rotation: newRoot.rotationQuaternion ? newRoot.rotationQuaternion.toEulerAngles().asArray() : newRoot.rotation.asArray(),
+				scaling: newRoot.scaling.asArray()
+			};
+			
+			this.placedObjects.push(newData);
+			newObjectsData.push(newData);
+			newMeshes.push(newRoot);
+		});
+		
+		Promise.all(promises).then(() => {
+			// 3. Select new objects
+			this.selectedMeshes = newMeshes;
+			this.selectedMeshes.forEach(m => this.setSelectionHighlight(m, true));
+			
+			// 4. Notify UI
+			if (this.onSelectionChange) {
+				const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
+				this.onSelectionChange(selectedData);
+			}
+			
+			// 5. History
+			this.undoRedo.add({ type: 'ADD', data: newObjectsData });
+		});
 	}
 	
 	removeObjectById (id, clearSelection = true) {
 		const mesh = this.findMeshById(id);
 		if (mesh) {
-			if (clearSelection && this.selectedMesh === mesh) {
-				this.selectObject(null);
+			if (clearSelection) {
+				// If we are removing a specific object, remove it from selection array
+				this.selectedMeshes = this.selectedMeshes.filter(m => m !== mesh);
+				if (this.selectedMeshes.length === 0) {
+					this.onSelectionChange(null);
+				} else {
+					// Update UI with remaining selection
+					const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
+					this.onSelectionChange(selectedData);
+				}
 			}
 			mesh.dispose();
 		}
@@ -175,26 +288,46 @@ export class ObjectManager {
 		}
 	}
 	
-	selectObject (mesh) {
-		// Deselect previous
-		if (this.selectedMesh) {
-			this.setSelectionHighlight(this.selectedMesh, false);
-		}
-		
+	selectObject (mesh, isMultiSelect) {
 		// Handle clicking sub-meshes
 		if (mesh && mesh.parent && mesh.parent.metadata && mesh.parent.metadata.isObject) {
 			mesh = mesh.parent;
 		}
 		
-		this.selectedMesh = mesh;
-		
-		if (this.selectedMesh) {
-			this.setSelectionHighlight(this.selectedMesh, true);
+		if (!isMultiSelect) {
+			// Single Select Mode: Clear previous
+			this.selectedMeshes.forEach(m => this.setSelectionHighlight(m, false));
+			this.selectedMeshes = [];
+			
+			if (mesh) {
+				this.selectedMeshes.push(mesh);
+				this.setSelectionHighlight(mesh, true);
+			}
+		} else {
+			// Multi Select Mode
+			if (mesh) {
+				const index = this.selectedMeshes.indexOf(mesh);
+				if (index !== -1) {
+					// Deselect if already selected
+					this.setSelectionHighlight(mesh, false);
+					this.selectedMeshes.splice(index, 1);
+				} else {
+					// Add to selection
+					this.selectedMeshes.push(mesh);
+					this.setSelectionHighlight(mesh, true);
+				}
+			}
 		}
 		
+		// Update UI
 		if (this.onSelectionChange) {
-			const data = mesh ? this.placedObjects.find(o => o.id === mesh.metadata.id) : null;
-			this.onSelectionChange(data);
+			if (this.selectedMeshes.length > 0) {
+				// Map meshes to their data objects
+				const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
+				this.onSelectionChange(selectedData);
+			} else {
+				this.onSelectionChange(null);
+			}
 		}
 	}
 	
@@ -213,80 +346,129 @@ export class ObjectManager {
 	
 	// --- Transformation & Snapping ---
 	
-	startDrag (mesh) {
-		if (!mesh) return;
-		this.dragStartData = {
-			position: mesh.position.asArray(),
-			rotation: mesh.rotation.asArray(),
-			scaling: mesh.scaling.asArray()
-		};
-		this.selectObject(mesh);
-	}
-	
-	handleDrag (mesh, targetPosition) {
-		let finalPos = targetPosition.clone();
+	startDrag (clickedMesh, groundPoint) {
+		if (!clickedMesh || this.selectedMeshes.length === 0) return;
 		
-		// 1. Grid Snapping
-		if (this.snapToGrid) {
-			finalPos.x = Math.round(finalPos.x / this.gridSize) * this.gridSize;
-			finalPos.z = Math.round(finalPos.z / this.gridSize) * this.gridSize;
-		}
+		this.dragStartData = [];
+		this.dragStartOffsets.clear();
 		
-		// 2. Object Snapping (Magnetic)
-		if (this.snapToObjects) {
-			const snapped = this.calculateObjectSnap(mesh, finalPos);
-			if (snapped) {
-				finalPos = snapped;
-			}
-		}
-		
-		mesh.position.x = finalPos.x;
-		mesh.position.z = finalPos.z;
-		
-		// Update UI live
-		if (this.onSelectionChange) {
-			const data = this.placedObjects.find(o => o.id === mesh.metadata.id);
-			if (data) {
-				data.position = mesh.position.asArray();
-				this.onSelectionChange(data);
-			}
-		}
-	}
-	
-	endDrag (mesh) {
-		if (!mesh || !this.dragStartData) return;
-		
-		const id = mesh.metadata.id;
-		const currentData = {
-			position: mesh.position.asArray(),
-			rotation: mesh.rotation.asArray(),
-			scaling: mesh.scaling.asArray()
-		};
-		
-		// Only add to history if changed
-		if (JSON.stringify(currentData) !== JSON.stringify(this.dragStartData)) {
-			// Update internal data model
-			const objIndex = this.placedObjects.findIndex(o => o.id === id);
-			if (objIndex !== -1) {
-				this.placedObjects[objIndex].position = currentData.position;
-				this.placedObjects[objIndex].rotation = currentData.rotation;
-				this.placedObjects[objIndex].scaling = currentData.scaling;
-			}
+		// Store initial state for all selected objects
+		this.selectedMeshes.forEach(mesh => {
+			this.dragStartData.push({
+				id: mesh.metadata.id,
+				position: mesh.position.asArray(),
+				rotation: mesh.rotation.asArray(),
+				scaling: mesh.scaling.asArray()
+			});
 			
+			// Calculate offset from the ground click point to the mesh position
+			// This allows moving the group relative to the cursor
+			const offset = mesh.position.subtract(groundPoint);
+			// Keep Y relative to mesh, but X/Z relative to ground point
+			offset.y = mesh.position.y;
+			this.dragStartOffsets.set(mesh.metadata.id, offset);
+		});
+	}
+	
+	handleDrag (clickedMesh, groundPoint) {
+		// Calculate the "target" position for the clicked mesh based on the cursor
+		// But we apply logic to all meshes
+		
+		// We need to determine the translation delta or absolute position for the group.
+		// Strategy: Calculate where the *clicked* mesh should be (snapped),
+		// then apply the difference to all others?
+		// Or calculate individual positions based on the cursor + offset?
+		
+		// Let's use individual positions based on cursor + offset.
+		// However, snapping needs to happen. Usually, we snap the "primary" object (clickedMesh)
+		// and move others relative to it to maintain formation.
+		
+		const primaryOffset = this.dragStartOffsets.get(clickedMesh.metadata.id);
+		if (!primaryOffset) return;
+		
+		// 1. Calculate Proposed Position for Primary Mesh
+		let proposedPrimaryPos = groundPoint.add(new BABYLON.Vector3(primaryOffset.x, 0, primaryOffset.z));
+		proposedPrimaryPos.y = primaryOffset.y; // Keep original Y
+		
+		// 2. Apply Grid Snapping to Primary
+		if (this.snapToGrid) {
+			proposedPrimaryPos.x = Math.round(proposedPrimaryPos.x / this.gridSize) * this.gridSize;
+			proposedPrimaryPos.z = Math.round(proposedPrimaryPos.z / this.gridSize) * this.gridSize;
+		}
+		
+		// 3. Apply Object Snapping to Primary
+		if (this.snapToObjects) {
+			const snapped = this.calculateObjectSnap(clickedMesh, proposedPrimaryPos);
+			if (snapped) {
+				proposedPrimaryPos = snapped;
+			}
+		}
+		
+		// 4. Calculate Delta (Movement vector)
+		const currentPrimaryPos = clickedMesh.position;
+		const delta = proposedPrimaryPos.subtract(currentPrimaryPos);
+		
+		// 5. Apply Delta to ALL selected meshes
+		this.selectedMeshes.forEach(mesh => {
+			mesh.position.addInPlace(delta);
+		});
+		
+		// Update UI live (only if single selected, or maybe show primary coords)
+		if (this.onSelectionChange && this.selectedMeshes.length === 1) {
+			const data = this.placedObjects.find(o => o.id === clickedMesh.metadata.id);
+			if (data) {
+				data.position = clickedMesh.position.asArray();
+				this.onSelectionChange([data]);
+			}
+		}
+	}
+	
+	endDrag (clickedMesh) {
+		if (!this.dragStartData) return;
+		
+		const changes = [];
+		
+		this.selectedMeshes.forEach(mesh => {
+			const id = mesh.metadata.id;
+			const startData = this.dragStartData.find(d => d.id === id);
+			
+			if (!startData) return;
+			
+			const currentData = {
+				position: mesh.position.asArray(),
+				rotation: mesh.rotation.asArray(),
+				scaling: mesh.scaling.asArray()
+			};
+			
+			// Check if changed
+			if (JSON.stringify(currentData.position) !== JSON.stringify(startData.position)) { // Only pos changes in drag
+				// Update internal data model
+				const objIndex = this.placedObjects.findIndex(o => o.id === id);
+				if (objIndex !== -1) {
+					this.placedObjects[objIndex].position = currentData.position;
+				}
+				
+				changes.push({
+					id: id,
+					oldData: startData,
+					newData: currentData
+				});
+			}
+		});
+		
+		if (changes.length > 0) {
 			this.undoRedo.add({
 				type: 'TRANSFORM',
-				id: id,
-				oldData: this.dragStartData,
-				newData: currentData
+				data: changes // Array of changes
 			});
 		}
 		
 		this.dragStartData = null;
+		this.dragStartOffsets.clear();
 	}
 	
 	calculateObjectSnap (mesh, proposedPos) {
 		// Get World Bounds of dragging mesh at proposed position
-		// We need to simulate the mesh being at proposedPos to get accurate bounds
 		const originalPos = mesh.position.clone();
 		mesh.position = proposedPos;
 		mesh.computeWorldMatrix(true);
@@ -308,9 +490,11 @@ export class ObjectManager {
 		let snapOffset = null;
 		const snapThreshold = 2.0; // Distance to activate snap
 		
-		// Iterate all other objects
+		// Iterate all other objects (excluding ALL selected objects)
 		this.scene.meshes.forEach(other => {
 			if (other === mesh || !other.metadata || !other.metadata.isObject || other.parent) return;
+			// Skip if other is also selected
+			if (this.selectedMeshes.includes(other)) return;
 			
 			const otherBounds = other.getHierarchyBoundingVectors();
 			const otherCorners = [
@@ -337,13 +521,14 @@ export class ObjectManager {
 			const snappedPos = proposedPos.add(snapOffset);
 			
 			// Check for overlap
-			// We move mesh to snappedPos, check intersection, then move back
 			mesh.position = snappedPos;
 			mesh.computeWorldMatrix(true);
 			
 			let overlaps = false;
 			for (const other of this.scene.meshes) {
 				if (other === mesh || !other.metadata || !other.metadata.isObject || other.parent) continue;
+				if (this.selectedMeshes.includes(other)) continue; // Ignore self-intersection within selection group
+				
 				if (mesh.intersectsMesh(other, true)) {
 					overlaps = true;
 					break;
@@ -360,7 +545,7 @@ export class ObjectManager {
 		return null;
 	}
 	
-	// Direct update from Property Panel
+	// Direct update from Property Panel (Single Object only for now)
 	updateObjectProperty (id, prop, value) {
 		const mesh = this.findMeshById(id);
 		if (!mesh) return;
@@ -377,7 +562,6 @@ export class ObjectManager {
 		if (prop === 'name') {
 			mesh.name = value;
 			objData.name = value;
-			// Name change doesn't strictly need undo/redo for geometry, but good to have.
 			return;
 		}
 		
@@ -406,9 +590,11 @@ export class ObjectManager {
 		
 		this.undoRedo.add({
 			type: 'TRANSFORM',
-			id: id,
-			oldData: oldData,
-			newData: newData
+			data: [{
+				id: id,
+				oldData: oldData,
+				newData: newData
+			}]
 		});
 	}
 	
@@ -431,8 +617,8 @@ export class ObjectManager {
 		}
 		
 		// Refresh UI if this object is selected
-		if (this.selectedMesh === mesh && this.onSelectionChange) {
-			this.onSelectionChange(objData);
+		if (this.selectedMeshes.includes(mesh) && this.selectedMeshes.length === 1 && this.onSelectionChange) {
+			this.onSelectionChange([objData]);
 		}
 	}
 	
@@ -455,12 +641,13 @@ export class ObjectManager {
 		});
 		
 		this.placedObjects = [];
+		this.selectedMeshes = [];
 		// Reset history via manager
 		this.undoRedo.history = [];
 		this.undoRedo.historyIndex = -1;
 		if (this.undoRedo.onHistoryChange) this.undoRedo.onHistoryChange();
 		
-		this.selectObject(null);
+		this.selectObject(null, false);
 		
 		if (data.assets) {
 			data.assets.forEach(item => this.restoreObject(item));

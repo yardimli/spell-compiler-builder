@@ -46,13 +46,20 @@ export class UndoRedoManager {
 	applyAction (action) {
 		switch (action.type) {
 			case 'ADD':
-				this.manager.restoreObject(action.data);
+				// action.data is an array of objects
+				action.data.forEach(item => this.manager.restoreObject(item));
 				break;
 			case 'DELETE':
-				this.manager.removeObjectById(action.id, false);
+				// action.data is an array of objects
+				action.data.forEach(item => this.manager.removeObjectById(item.id, false));
+				// Clear selection after batch delete
+				if (this.manager.onSelectionChange) this.manager.onSelectionChange(null);
 				break;
 			case 'TRANSFORM':
-				this.manager.updateObjectTransform(action.id, action.newData);
+				// action.data is an array of {id, oldData, newData}
+				action.data.forEach(change => {
+					this.manager.updateObjectTransform(change.id, change.newData);
+				});
 				break;
 		}
 	}
@@ -60,13 +67,16 @@ export class UndoRedoManager {
 	revertAction (action) {
 		switch (action.type) {
 			case 'ADD':
-				this.manager.removeObjectById(action.data.id, false);
+				action.data.forEach(item => this.manager.removeObjectById(item.id, false));
+				if (this.manager.onSelectionChange) this.manager.onSelectionChange(null);
 				break;
 			case 'DELETE':
-				this.manager.restoreObject(action.data);
+				action.data.forEach(item => this.manager.restoreObject(item));
 				break;
 			case 'TRANSFORM':
-				this.manager.updateObjectTransform(action.id, action.oldData);
+				action.data.forEach(change => {
+					this.manager.updateObjectTransform(change.id, change.oldData);
+				});
 				break;
 		}
 	}
