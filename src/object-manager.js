@@ -849,6 +849,11 @@ export class ObjectManager {
 		}
 	}
 	
+	// New: Clear Scene Method
+	clearScene () {
+		this.loadMapData({ assets: [] });
+	}
+	
 	// Auto-Save Logic
 	saveToAutoSave() {
 		if (!this.autoSaveEnabled) return false;

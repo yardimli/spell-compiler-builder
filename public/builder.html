@@ -86,7 +86,39 @@
 		.asset-name { font-size: 10px; text-align: center; word-break: break-all; pointer-events: none; text-transform: capitalize; }
 		
 		/* Controls */
-		#controls { padding: 15px; background: #1a252f; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+		#controls-container {
+			background: #1a252f;
+			display: flex;
+			flex-direction: column;
+			font-size: 14px;
+			border-top: 2px solid #1a252f;
+		}
+		
+		#controls-header {
+			/* Reusing category-header styles but specific for controls */
+			background: #2c3e50;
+			padding: 10px 15px;
+			cursor: pointer;
+			font-weight: bold;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			user-select: none;
+			border-top: 1px solid #46607a;
+		}
+		#controls-header:hover { background: #3e5871; }
+		#controls-header::after { content: '▼'; font-size: 10px; transition: transform 0.2s; }
+		#controls-header.collapsed::after { transform: rotate(-90deg); }
+		
+		#controls-content {
+			padding: 15px;
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+			background: #1a252f;
+		}
+		#controls-content.hidden { display: none; }
+		
 		.control-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 5px; }
 		.control-row { display: flex; gap: 5px; align-items: center; justify-content: space-between; }
 		
@@ -240,37 +272,42 @@
 				<button id="btnLoadAssets" class="info">Load Assets</button>
 			</div>
 		</div>
-		<div id="controls">
-			<div class="control-row">
-				<button id="btnUndo" class="secondary" disabled>Undo</button>
-				<button id="btnRedo" class="secondary" disabled>Redo</button>
+		
+		<!-- Collapsible Controls Container -->
+		<div id="controls-container">
+			<div id="controls-header">
+				Map Controls
 			</div>
-			
-			<div class="control-group">
-				<label>Quick Snapping:</label>
+			<div id="controls-content">
 				<div class="control-row">
-					<label><input type="checkbox" id="chkSnapGrid"> Grid</label>
-					<label><input type="checkbox" id="chkSnapObj"> Objects</label>
+					<button id="btnUndo" class="secondary" disabled>Undo</button>
+					<button id="btnRedo" class="secondary" disabled>Redo</button>
 				</div>
+				
+				<div class="control-group">
+					<label>Quick Snapping:</label>
+					<div class="control-row">
+						<label><input type="checkbox" id="chkSnapGrid"> Grid</label>
+						<label><input type="checkbox" id="chkSnapObj"> Objects</label>
+					</div>
+				</div>
+				
+				<!-- Map Name input removed from here -->
+				
+				<!-- Added Reset Camera Button -->
+				<button id="btnResetCam" class="secondary" style="margin-bottom: 5px;">Reset Camera</button>
+				
+				<button id="btnSettings" class="info">Global Settings</button>
+				<button id="btnSave">Save Map (JSON)</button>
+				<button id="btnSaveAs" class="secondary">Save As...</button>
+				<button id="btnLoad" class="secondary">Load Map</button>
+				<button id="btnAddLight">Add Point Light</button>
+				<button id="btnClearScene" class="danger">Clear Scene</button>
+				<input type="file" id="fileInput" accept=".json">
 			</div>
-			
-			<div class="control-group">
-				<label>Map Name:</label>
-				<input type="text" id="mapName" value="new_map">
-			</div>
-			
-			<!-- Added Reset Camera Button -->
-			<button id="btnResetCam" class="secondary" style="margin-bottom: 5px;">Reset Camera</button>
-			
-			<button id="btnSettings" class="info">Global Settings</button>
-			<button id="btnSave">Save Map (JSON)</button>
-			<button id="btnSaveAs" class="secondary">Save As...</button>
-			<button id="btnLoad" class="secondary">Load Map</button>
-			<button id="btnAddLight">Add Point Light</button>
-			<input type="file" id="fileInput" accept=".json">
 			
 			<!-- Auto Save Status -->
-			<div id="auto-save-container" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #34495e; font-size: 12px; color: #bdc3c7; text-align: center;">
+			<div id="auto-save-container" style="padding: 10px; border-top: 1px solid #34495e; font-size: 12px; color: #bdc3c7; text-align: center; background: #1a252f;">
 				<span id="auto-save-text">Not saved yet.</span>
 				<a href="#" id="btnSaveNow" style="color: #3498db; text-decoration: none; margin-left: 5px;">Save Now</a>
 			</div>
@@ -405,6 +442,23 @@
 			<div class="modal-footer">
 				<button id="btnCancelGrid" class="secondary">Cancel</button>
 				<button id="btnCreateGrid">Create Grid</button>
+			</div>
+		</div>
+	</div>
+	
+	<!-- Save Map Modal -->
+	<div id="saveMapModal" class="modal-overlay">
+		<div class="modal-content">
+			<div class="modal-header">Save Map</div>
+			
+			<div class="control-group">
+				<label>Map Name:</label>
+				<input type="text" id="saveMapName" value="new_map">
+			</div>
+			
+			<div class="modal-footer">
+				<button id="btnCancelSave" class="secondary">Cancel</button>
+				<button id="btnConfirmSave">Save</button>
 			</div>
 		</div>
 	</div>

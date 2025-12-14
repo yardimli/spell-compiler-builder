@@ -10,6 +10,7 @@ export class BuilderUI {
 		// LocalStorage Keys
 		this.LS_SETTINGS_KEY = 'builder_global_settings';
 		this.LS_SIDEBAR_KEY = 'builder_sidebar_state';
+		this.LS_CONTROLS_KEY = 'builder_controls_state';
 		
 		// Default Global Settings
 		this.globalSettings = {
@@ -52,8 +53,10 @@ export class BuilderUI {
 		}
 		
 		this.setupControls();
+		this.setupCollapsibleControls();
 		this.setupHistoryUI();
 		this.setupSettingsModal();
+		this.setupSaveModal();
 		this.setupContextMenu();
 		this.setupAutoSaveTimer(); // Initialize timer
 	}
@@ -280,6 +283,25 @@ export class BuilderUI {
 		});
 	}
 	
+	setupCollapsibleControls () {
+		const header = document.getElementById('controls-header');
+		const content = document.getElementById('controls-content');
+		
+		// Load state
+		const isCollapsed = localStorage.getItem(this.LS_CONTROLS_KEY) === 'true';
+		
+		if (isCollapsed) {
+			header.classList.add('collapsed');
+			content.classList.add('hidden');
+		}
+		
+		header.addEventListener('click', () => {
+			const collapsed = header.classList.toggle('collapsed');
+			content.classList.toggle('hidden');
+			localStorage.setItem(this.LS_CONTROLS_KEY, collapsed);
+		});
+	}
+	
 	setupControls () {
 		// Snapping Toggles (Quick Access)
 		const chkSnapGrid = document.getElementById('chkSnapGrid');
@@ -296,32 +318,9 @@ export class BuilderUI {
 			this.saveSettings();
 		};
 		
-		// Map Name
-		const mapNameInput = document.getElementById('mapName');
-		mapNameInput.oninput = (e) => {
-			this.currentMapName = e.target.value;
-		};
-		
 		// Reset Camera
 		document.getElementById('btnResetCam').onclick = () => {
 			this.scene.resetCamera();
-		};
-		
-		// Save
-		document.getElementById('btnSave').onclick = () => {
-			const data = this.manager.getMapData(this.currentMapName);
-			this.downloadJSON(data, this.currentMapName);
-		};
-		
-		// Save As
-		document.getElementById('btnSaveAs').onclick = () => {
-			const newName = prompt('Enter new map name:', this.currentMapName);
-			if (newName) {
-				this.currentMapName = newName;
-				mapNameInput.value = newName;
-				const data = this.manager.getMapData(newName);
-				this.downloadJSON(data, newName);
-			}
 		};
 		
 		// Load
@@ -334,7 +333,6 @@ export class BuilderUI {
 				try {
 					const data = JSON.parse(evt.target.result);
 					this.currentMapName = data.name || 'loaded_map';
-					mapNameInput.value = this.currentMapName;
 					this.manager.loadMapData(data);
 				} catch (err) {
 					console.error(err);
@@ -348,6 +346,68 @@ export class BuilderUI {
 		// Add Light
 		document.getElementById('btnAddLight').onclick = () => {
 			this.manager.addLight(this.scene.selectedCellPosition);
+		};
+		
+		// Clear Scene
+		document.getElementById('btnClearScene').onclick = () => {
+			if (confirm('Are you sure you want to clear the entire scene? This cannot be undone.')) {
+				this.manager.clearScene();
+				this.currentMapName = 'new_map';
+			}
+		};
+	}
+	
+	setupSaveModal () {
+		const modal = document.getElementById('saveMapModal');
+		const btnSave = document.getElementById('btnSave');
+		const btnSaveAs = document.getElementById('btnSaveAs');
+		const btnConfirm = document.getElementById('btnConfirmSave');
+		const btnCancel = document.getElementById('btnCancelSave');
+		const inputName = document.getElementById('saveMapName');
+		
+		const openModal = () => {
+			inputName.value = this.currentMapName;
+			modal.style.display = 'flex';
+			inputName.focus();
+		};
+		
+		const closeModal = () => {
+			modal.style.display = 'none';
+		};
+		
+		// Save Button Logic
+		btnSave.onclick = () => {
+			if (this.currentMapName === 'new_map') {
+				openModal();
+			} else {
+				// Direct save if name is already set
+				const data = this.manager.getMapData(this.currentMapName);
+				this.downloadJSON(data, this.currentMapName);
+			}
+		};
+		
+		// Save As Button Logic (Always open modal)
+		btnSaveAs.onclick = () => {
+			openModal();
+		};
+		
+		btnCancel.onclick = closeModal;
+		
+		btnConfirm.onclick = () => {
+			const name = inputName.value.trim();
+			if (name) {
+				this.currentMapName = name;
+				const data = this.manager.getMapData(this.currentMapName);
+				this.downloadJSON(data, this.currentMapName);
+				closeModal();
+			} else {
+				alert('Please enter a map name.');
+			}
+		};
+		
+		// Close on outside click
+		window.onclick = (event) => {
+			if (event.target === modal) closeModal();
 		};
 	}
 	
