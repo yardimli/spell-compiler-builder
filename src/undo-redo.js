@@ -27,10 +27,16 @@ export class UndoRedoManager {
 		if (this.historyIndex < 0) return;
 		
 		const action = this.history[this.historyIndex];
-		this.revertAction(action);
+		// Get IDs of objects involved in this undo step
+		const affectedIds = this.revertAction(action);
 		this.historyIndex--;
 		
 		if (this.onHistoryChange) this.onHistoryChange();
+		
+		// Reselect the affected objects if they exist
+		if (affectedIds && affectedIds.length > 0) {
+			this.manager.selectObjectsByIds(affectedIds);
+		}
 	}
 	
 	redo () {
@@ -38,20 +44,34 @@ export class UndoRedoManager {
 		
 		this.historyIndex++;
 		const action = this.history[this.historyIndex];
-		this.applyAction(action);
+		// Get IDs of objects involved in this redo step
+		const affectedIds = this.applyAction(action);
 		
 		if (this.onHistoryChange) this.onHistoryChange();
+		
+		// Reselect the affected objects if they exist
+		if (affectedIds && affectedIds.length > 0) {
+			this.manager.selectObjectsByIds(affectedIds);
+		}
 	}
 	
 	applyAction (action) {
+		const affectedIds = [];
+		
 		switch (action.type) {
 			case 'ADD':
 				// action.data is an array of objects
-				action.data.forEach(item => this.manager.restoreObject(item));
+				action.data.forEach(item => {
+					this.manager.restoreObject(item);
+					affectedIds.push(item.id);
+				});
 				break;
 			case 'DELETE':
 				// action.data is an array of objects
-				action.data.forEach(item => this.manager.removeObjectById(item.id, false));
+				action.data.forEach(item => {
+					this.manager.removeObjectById(item.id, false);
+					// We don't select deleted objects
+				});
 				// Clear selection after batch delete
 				if (this.manager.onSelectionChange) this.manager.onSelectionChange(null);
 				break;
@@ -59,25 +79,38 @@ export class UndoRedoManager {
 				// action.data is an array of {id, oldData, newData}
 				action.data.forEach(change => {
 					this.manager.updateObjectTransform(change.id, change.newData);
+					affectedIds.push(change.id);
 				});
 				break;
 		}
+		
+		return affectedIds;
 	}
 	
 	revertAction (action) {
+		const affectedIds = [];
+		
 		switch (action.type) {
 			case 'ADD':
-				action.data.forEach(item => this.manager.removeObjectById(item.id, false));
+				action.data.forEach(item => {
+					this.manager.removeObjectById(item.id, false);
+				});
 				if (this.manager.onSelectionChange) this.manager.onSelectionChange(null);
 				break;
 			case 'DELETE':
-				action.data.forEach(item => this.manager.restoreObject(item));
+				action.data.forEach(item => {
+					this.manager.restoreObject(item);
+					affectedIds.push(item.id);
+				});
 				break;
 			case 'TRANSFORM':
 				action.data.forEach(change => {
 					this.manager.updateObjectTransform(change.id, change.oldData);
+					affectedIds.push(change.id);
 				});
 				break;
 		}
+		
+		return affectedIds;
 	}
 }

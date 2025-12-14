@@ -34,14 +34,14 @@ export class ObjectManager {
 		this.dragStartData = null;
 	}
 	
-	get gridSize() { return this._gridSize; }
-	set gridSize(val) {
+	get gridSize () { return this._gridSize; }
+	set gridSize (val) {
 		this._gridSize = val;
 		this.updateGizmoSettings();
 	}
 	
 	// --- Gizmo Setup ---
-	setupGizmo() {
+	setupGizmo () {
 		// Initialize all gizmos but control visibility via updateGizmoSettings
 		this.gizmoManager.positionGizmoEnabled = true;
 		this.gizmoManager.rotationGizmoEnabled = true;
@@ -141,12 +141,12 @@ export class ObjectManager {
 		this.updateGizmoSettings();
 	}
 	
-	setGizmoMode(mode) {
+	setGizmoMode (mode) {
 		this.gizmoMode = mode;
 		this.updateGizmoSettings();
 	}
 	
-	updateGizmoSettings() {
+	updateGizmoSettings () {
 		// Enable only the active gizmo
 		this.gizmoManager.positionGizmoEnabled = (this.gizmoMode === 'position');
 		this.gizmoManager.rotationGizmoEnabled = (this.gizmoMode === 'rotation');
@@ -226,7 +226,6 @@ export class ObjectManager {
 			this.selectObject(root, false);
 			
 			this.undoRedo.add({ type: 'ADD', data: [objData] });
-			
 		} catch (err) {
 			console.error('Error adding asset:', err);
 		}
@@ -302,9 +301,8 @@ export class ObjectManager {
 			});
 			
 			this.undoRedo.add({ type: 'ADD', data: addedObjectsData });
-			
 		} catch (e) {
-			console.error("Grid spawn error:", e);
+			console.error('Grid spawn error:', e);
 		}
 	}
 	
@@ -498,6 +496,29 @@ export class ObjectManager {
 		}
 	}
 	
+	// --- New Helper for Undo/Redo Selection ---
+	selectObjectsByIds (ids) {
+		// Clear current selection
+		this.selectObject(null, false);
+		
+		// Find and select objects from the ID list
+		const meshesToSelect = [];
+		ids.forEach(id => {
+			const mesh = this.findMeshById(id);
+			if (mesh) {
+				meshesToSelect.push(mesh);
+			}
+		});
+		
+		if (meshesToSelect.length > 0) {
+			// Select first one to init, then others as multi-select
+			this.selectObject(meshesToSelect[0], false);
+			for (let i = 1; i < meshesToSelect.length; i++) {
+				this.selectObject(meshesToSelect[i], true);
+			}
+		}
+	}
+	
 	selectObject (mesh, isMultiSelect) {
 		// Handle clicking sub-meshes
 		if (mesh && mesh.parent && mesh.parent.metadata && mesh.parent.metadata.isObject) {
@@ -541,7 +562,7 @@ export class ObjectManager {
 	}
 	
 	// Handles creating/destroying the proxy node for multi-selection
-	updateSelectionProxy() {
+	updateSelectionProxy () {
 		// 1. Cleanup existing proxy
 		if (this.selectionProxy) {
 			// Unparent children (restores world transform)
@@ -576,7 +597,7 @@ export class ObjectManager {
 			this.gizmoManager.attachToMesh(this.selectedMeshes[0]);
 		} else {
 			// Multi Object: Create Proxy
-			this.selectionProxy = new BABYLON.TransformNode("selectionProxy", this.scene);
+			this.selectionProxy = new BABYLON.TransformNode('selectionProxy', this.scene);
 			
 			// Calculate Center
 			let min = new BABYLON.Vector3(Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE);
@@ -690,7 +711,7 @@ export class ObjectManager {
 		});
 	}
 	
-	updateMultipleObjectsProperty(prop, value) {
+	updateMultipleObjectsProperty (prop, value) {
 		if (prop === 'isLocked') {
 			this.selectedMeshes.forEach(mesh => {
 				const objData = this.placedObjects.find(o => o.id === mesh.metadata.id);
@@ -720,7 +741,7 @@ export class ObjectManager {
 		});
 	}
 	
-	alignSelection(axis, mode) {
+	alignSelection (axis, mode) {
 		if (this.selectedMeshes.length < 2) return;
 		
 		// Detach proxy to manipulate individual positions easily
@@ -815,8 +836,8 @@ export class ObjectManager {
 		this.updateSelectionProxy();
 	}
 	
-	// --- New Method: Snap Selection Side-by-Side ---
-	snapSelection(axis) {
+	// --- Updated Method: Snap Selection Side-by-Side (Respects Locked Objects) ---
+	snapSelection (axis) {
 		if (this.selectedMeshes.length < 2) return;
 		
 		// 1. Detach Proxy to handle individual transforms
@@ -841,48 +862,101 @@ export class ObjectManager {
 			});
 		});
 		
-		// 3. Sort Meshes along axis
-		// We need to calculate current bounds to sort
+		// 3. Prepare data with bounds and locked status
 		const meshesWithBounds = this.selectedMeshes.map(mesh => {
 			mesh.computeWorldMatrix(true);
+			const objData = this.placedObjects.find(o => o.id === mesh.metadata.id);
 			return {
 				mesh: mesh,
+				data: objData,
 				bounds: mesh.getHierarchyBoundingVectors()
 			};
 		});
 		
+		// 4. Sort Meshes along axis
 		meshesWithBounds.sort((a, b) => {
 			return a.bounds.min[axis] - b.bounds.min[axis];
 		});
 		
-		// 4. Apply Spacing
-		// We keep the first one where it is.
-		let currentEdge = meshesWithBounds[0].bounds.max[axis];
+		// 5. Apply Spacing Logic
+		const lockedIndices = meshesWithBounds.map((m, i) => m.data.isLocked ? i : -1).filter(i => i !== -1);
 		
-		for (let i = 1; i < meshesWithBounds.length; i++) {
-			const item = meshesWithBounds[i];
-			const mesh = item.mesh;
+		if (lockedIndices.length === 0) {
+			// Standard Behavior: No locked objects, snap everything left-to-right starting from first
+			let currentEdge = meshesWithBounds[0].bounds.max[axis];
 			
-			// Calculate width/height/depth of current item
-			const dim = item.bounds.max[axis] - item.bounds.min[axis];
+			for (let i = 1; i < meshesWithBounds.length; i++) {
+				const item = meshesWithBounds[i];
+				const mesh = item.mesh;
+				
+				const dim = item.bounds.max[axis] - item.bounds.min[axis];
+				const currentMin = item.bounds.min[axis];
+				const shift = currentEdge - currentMin;
+				
+				mesh.position[axis] += shift;
+				currentEdge += dim;
+				mesh.computeWorldMatrix(true);
+			}
+		} else {
+			// Locked Behavior: Use locked objects as anchors
+			// We use the first locked object found in the sorted list as the primary pivot.
+			// Objects before it snap backwards (right-to-left).
+			// Objects after it snap forwards (left-to-right).
+			// If subsequent locked objects are encountered, they reset the snapping edge.
 			
-			// We want item.min[axis] to be currentEdge
-			// The shift required:
-			const currentMin = item.bounds.min[axis];
-			const shift = currentEdge - currentMin;
+			const pivotIndex = lockedIndices[0];
 			
-			// Apply shift
-			mesh.position[axis] += shift;
+			// A. Process Backwards (from pivotIndex - 1 down to 0)
+			// The edge starts at the min of the pivot
+			let backEdge = meshesWithBounds[pivotIndex].bounds.min[axis];
 			
-			// Update currentEdge for next iteration
-			// The new max is the new min (currentEdge) + dimension
-			currentEdge += dim;
+			for (let i = pivotIndex - 1; i >= 0; i--) {
+				const item = meshesWithBounds[i];
+				const mesh = item.mesh;
+				
+				if (item.data.isLocked) {
+					// If we hit another locked object going backwards, it stays put.
+					// Reset the edge to this object's min for any further preceding objects.
+					backEdge = item.bounds.min[axis];
+				} else {
+					// Move object so its MAX touches backEdge
+					const dim = item.bounds.max[axis] - item.bounds.min[axis];
+					const currentMax = item.bounds.max[axis];
+					const shift = backEdge - currentMax;
+					
+					mesh.position[axis] += shift;
+					// New backEdge is the min of this moved object
+					backEdge -= dim;
+					mesh.computeWorldMatrix(true);
+				}
+			}
 			
-			// Update World Matrix for safety (though we are just adding to position)
-			mesh.computeWorldMatrix(true);
+			// B. Process Forwards (from pivotIndex + 1 to end)
+			// The edge starts at the max of the pivot
+			let fwdEdge = meshesWithBounds[pivotIndex].bounds.max[axis];
+			
+			for (let i = pivotIndex + 1; i < meshesWithBounds.length; i++) {
+				const item = meshesWithBounds[i];
+				const mesh = item.mesh;
+				
+				if (item.data.isLocked) {
+					// If we hit another locked object going forward, it stays put.
+					// Reset the edge to this object's max for subsequent objects.
+					fwdEdge = item.bounds.max[axis];
+				} else {
+					// Move object so its MIN touches fwdEdge
+					const dim = item.bounds.max[axis] - item.bounds.min[axis];
+					const currentMin = item.bounds.min[axis];
+					const shift = fwdEdge - currentMin;
+					
+					mesh.position[axis] += shift;
+					fwdEdge += dim;
+					mesh.computeWorldMatrix(true);
+				}
+			}
 		}
 		
-		// 5. Update Undo Data & Internal State
+		// 6. Update Undo Data & Internal State
 		changes.forEach(change => {
 			const mesh = this.findMeshById(change.id);
 			const objData = this.placedObjects.find(o => o.id === change.id);
@@ -901,7 +975,7 @@ export class ObjectManager {
 			}
 		});
 		
-		// Filter out no-ops (first item usually)
+		// Filter out no-ops
 		const actualChanges = changes.filter(c =>
 			JSON.stringify(c.oldData) !== JSON.stringify(c.newData)
 		);
@@ -919,7 +993,7 @@ export class ObjectManager {
 			}
 		}
 		
-		// 6. Re-attach Proxy
+		// 7. Re-attach Proxy
 		this.updateSelectionProxy();
 	}
 	
@@ -981,22 +1055,22 @@ export class ObjectManager {
 		this.loadMapData({ assets: [] });
 	}
 	
-	saveToAutoSave() {
+	saveToAutoSave () {
 		if (!this.autoSaveEnabled) return false;
 		const data = this.getMapData('autosave');
 		localStorage.setItem(LS_AUTOSAVE_KEY, JSON.stringify(data));
 		return true;
 	}
 	
-	loadFromAutoSave() {
+	loadFromAutoSave () {
 		const saved = localStorage.getItem(LS_AUTOSAVE_KEY);
 		if (saved) {
 			try {
 				const data = JSON.parse(saved);
-				console.log("Restoring auto-saved map...");
+				console.log('Restoring auto-saved map...');
 				this.loadMapData(data);
 			} catch (e) {
-				console.error("Failed to load auto-save", e);
+				console.error('Failed to load auto-save', e);
 			}
 		}
 	}
