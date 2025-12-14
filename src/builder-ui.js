@@ -21,6 +21,11 @@ export class BuilderUI {
 			autoSave: true // Default enabled
 		};
 		
+		// Auto Save State
+		this.lastSaveTime = null;
+		this.autoSaveInterval = null;
+		this.uiUpdateInterval = null;
+		
 		// Ensure manager exists before creating panel
 		if (this.manager) {
 			this.propertyPanel = new PropertyPanel(this.manager);
@@ -43,6 +48,65 @@ export class BuilderUI {
 		this.setupHistoryUI();
 		this.setupSettingsModal();
 		this.setupContextMenu();
+		this.setupAutoSaveTimer(); // Initialize timer
+	}
+	
+	// --- Auto Save Logic ---
+	setupAutoSaveTimer () {
+		const saveText = document.getElementById('auto-save-text');
+		const btnSaveNow = document.getElementById('btnSaveNow');
+		
+		// Define the save action
+		const performSave = () => {
+			if (this.globalSettings.autoSave) {
+				const success = this.manager.saveToAutoSave();
+				if (success) {
+					this.lastSaveTime = Date.now();
+					this.updateAutoSaveUI();
+				}
+			}
+		};
+		
+		// 1. Timer: Run every 15 seconds
+		this.autoSaveInterval = setInterval(performSave, 15000);
+		
+		// 2. UI Updater: Run every 1 second to update relative time text
+		this.uiUpdateInterval = setInterval(() => {
+			this.updateAutoSaveUI();
+		}, 1000);
+		
+		// 3. Manual Trigger
+		if (btnSaveNow) {
+			btnSaveNow.onclick = (e) => {
+				e.preventDefault();
+				performSave();
+				// Reset the interval so we don't double save immediately
+				clearInterval(this.autoSaveInterval);
+				this.autoSaveInterval = setInterval(performSave, 15000);
+			};
+		}
+	}
+	
+	updateAutoSaveUI () {
+		const saveText = document.getElementById('auto-save-text');
+		if (!saveText) return;
+		
+		if (!this.globalSettings.autoSave) {
+			saveText.innerText = "Auto-save disabled";
+			return;
+		}
+		
+		if (!this.lastSaveTime) {
+			saveText.innerText = "Not saved yet.";
+		} else {
+			const diff = Math.floor((Date.now() - this.lastSaveTime) / 1000);
+			if (diff < 60) {
+				saveText.innerText = `Saved ${diff} seconds ago`;
+			} else {
+				const mins = Math.floor(diff / 60);
+				saveText.innerText = `Saved ${mins} min ago`;
+			}
+		}
 	}
 	
 	// --- LocalStorage Logic ---
@@ -77,6 +141,9 @@ export class BuilderUI {
 		// Sync Quick Toggles in Sidebar
 		document.getElementById('chkSnapGrid').checked = this.globalSettings.snapGrid;
 		document.getElementById('chkSnapObj').checked = this.globalSettings.snapObj;
+		
+		// Update UI text immediately
+		this.updateAutoSaveUI();
 	}
 	
 	// --- Sidebar Logic ---

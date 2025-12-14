@@ -10,6 +10,11 @@
 - when multiple objects are selected in the properties menu add 3 button set X, Y and Z to same values
 
 #TODO 7
+- when multiple objects are select instead of x,y,z add 2 for each align to the min or max of each use the highest/lowest value of selected objects.
+- add buttons to align tops, align bottoms of selected objects
+
+
+#TODO 8
 
 - make light button open a dropdown with Pointlight, DirectionalLight, HemisphericLight
 - add property panel for lights to adjust color diffuse and specular for all 3 types and groundColor for HemisphericLight

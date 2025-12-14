@@ -23,12 +23,8 @@ export class ObjectManager {
 		// Initialize Undo/Redo Manager
 		this.undoRedo = new UndoRedoManager(this);
 		
-		// Hook into history change for auto-save
-		const originalOnHistoryChange = this.undoRedo.onHistoryChange;
-		this.undoRedo.onHistoryChange = () => {
-			if (originalOnHistoryChange) originalOnHistoryChange();
-			this.saveToAutoSave();
-		};
+		// Hook into history change (Removed auto-save call from here)
+		// The UI now handles auto-save via timer
 		
 		// Events
 		this.onSelectionChange = null; // Callback for UI
@@ -670,9 +666,7 @@ export class ObjectManager {
 		// Handle Locking
 		if (prop === 'isLocked') {
 			objData.isLocked = value;
-			// No history for locking? Or should we? Let's skip history for lock state for now as it's a meta-property
-			// But we should trigger auto-save
-			this.saveToAutoSave();
+			// Removed auto-save call here
 			return;
 		}
 		
@@ -729,7 +723,7 @@ export class ObjectManager {
 				const objData = this.placedObjects.find(o => o.id === mesh.metadata.id);
 				if (objData) objData.isLocked = value;
 			});
-			this.saveToAutoSave();
+			// Removed auto-save call here
 		}
 	}
 	
@@ -857,9 +851,10 @@ export class ObjectManager {
 	
 	// Auto-Save Logic
 	saveToAutoSave() {
-		if (!this.autoSaveEnabled) return;
+		if (!this.autoSaveEnabled) return false;
 		const data = this.getMapData('autosave');
 		localStorage.setItem(LS_AUTOSAVE_KEY, JSON.stringify(data));
+		return true;
 	}
 	
 	loadFromAutoSave() {
