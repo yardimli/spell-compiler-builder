@@ -7,6 +7,7 @@
 - allow user to select multiple objects and lock them all at once
 - save current map to local storage so it persists between sessions (checkbox in global settings modal to enable/disable this feature, enabled by default)
 - allow to add a grid of objects, when adding right click on the objects sidebar add an option to add a grid of objects (specify rows and columns), the objects should touch each other without gaps
+- when multiple objects are selected in the properties menu add 3 button set X, Y and Z to same values
 
 #TODO 7
 

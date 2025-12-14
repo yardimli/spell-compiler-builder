@@ -269,23 +269,13 @@ export class ObjectManager {
 			}
 		});
 		
-		// Update selection array to remove deleted ones
-		this.selectedMeshes = this.selectedMeshes.filter(m => !deletedIds.includes(m.metadata.id));
-		
 		// If anything was deleted, add to history
 		if (deletedData.length > 0) {
 			this.undoRedo.add({ type: 'DELETE', data: deletedData });
 		}
 		
 		// Update UI
-		if (this.onSelectionChange) {
-			if (this.selectedMeshes.length > 0) {
-				const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
-				this.onSelectionChange(selectedData);
-			} else {
-				this.onSelectionChange(null);
-			}
-		}
+		this.onSelectionChange(null);
 	}
 	
 	duplicateSelection () {
