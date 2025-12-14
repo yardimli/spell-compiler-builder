@@ -93,6 +93,26 @@ export class BuilderScene {
 		return await loadAssets(this.engine);
 	}
 	
+	// --- New Camera Reset Method ---
+	resetCamera () {
+		const targetPos = BABYLON.Vector3.Zero();
+		const targetRadius = 20;
+		const targetAlpha = -Math.PI / 2;
+		const targetBeta = Math.PI / 3;
+		
+		// Stop existing animations
+		this.scene.stopAnimation(this.camera);
+		
+		// Create animations for smooth transition
+		const frameRate = 60;
+		const durationFrames = 45;
+		
+		BABYLON.Animation.CreateAndStartAnimation('camTarget', this.camera, 'target', frameRate, durationFrames, this.camera.target.clone(), targetPos, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+		BABYLON.Animation.CreateAndStartAnimation('camRadius', this.camera, 'radius', frameRate, durationFrames, this.camera.radius, targetRadius, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+		BABYLON.Animation.CreateAndStartAnimation('camAlpha', this.camera, 'alpha', frameRate, durationFrames, this.camera.alpha, targetAlpha, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+		BABYLON.Animation.CreateAndStartAnimation('camBeta', this.camera, 'beta', frameRate, durationFrames, this.camera.beta, targetBeta, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+	}
+	
 	createGrid (gridSize) {
 		const width = 200;
 		const height = 200;

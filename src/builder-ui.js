@@ -258,6 +258,11 @@ export class BuilderUI {
 			this.currentMapName = e.target.value;
 		};
 		
+		// Reset Camera
+		document.getElementById('btnResetCam').onclick = () => {
+			this.scene.resetCamera();
+		};
+		
 		// Save
 		document.getElementById('btnSave').onclick = () => {
 			const data = this.manager.getMapData(this.currentMapName);
