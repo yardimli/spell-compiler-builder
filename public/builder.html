@@ -138,7 +138,7 @@
 			position: absolute;
 			left: 300px; /* Aligned to the right of the sidebar */
 			top: 10px;
-			width: 250px;
+			width: 280px; /* Widened slightly for alignment buttons */
 			background: rgba(44, 62, 80, 0.95); /* Semi-transparent background */
 			color: white;
 			display: none; /* Hidden by default until object selected */
@@ -171,6 +171,11 @@
 			font-size: 12px;
 		}
 		.multi-select-item:last-child { border-bottom: none; }
+		
+		/* Alignment Grid */
+		.align-grid { display: grid; grid-template-columns: 30px 1fr 1fr 1fr; gap: 4px; align-items: center; margin-bottom: 5px; }
+		.align-grid span { color: #95a5a6; font-weight: bold; text-align: center; }
+		.align-grid button { padding: 4px; font-size: 10px; }
 		
 		#renderCanvas { flex: 1; outline: none; touch-action: none; cursor: crosshair; }
 		#fileInput { display: none; }
@@ -292,8 +297,6 @@
 					</div>
 				</div>
 				
-				<!-- Map Name input removed from here -->
-				
 				<!-- Added Reset Camera Button -->
 				<button id="btnResetCam" class="secondary" style="margin-bottom: 5px;">Reset Camera</button>
 				
@@ -335,6 +338,11 @@
 			</div>
 			
 			<div class="prop-group">
+				<label>Tint Color</label>
+				<input type="color" id="propTint" value="#ffffff">
+			</div>
+			
+			<div class="prop-group">
 				<label>Position</label>
 				<div class="prop-row"><span>X</span><input type="number" id="posX" step="0.1"></div>
 				<div class="prop-row"><span>Y</span><input type="number" id="posY" step="0.1"></div>
@@ -360,10 +368,29 @@
 		<div id="multi-obj-props" style="display: none;">
 			<div class="prop-group">
 				<label>Alignment</label>
-				<div class="control-row">
-					<button id="btnAlignX" class="secondary">Align X</button>
-					<button id="btnAlignY" class="secondary">Align Y</button>
-					<button id="btnAlignZ" class="secondary">Align Z</button>
+				
+				<!-- X Axis -->
+				<div class="align-grid">
+					<span>X</span>
+					<button id="btnAlignXMin" class="secondary" title="Align Left">Min</button>
+					<button id="btnAlignXCenter" class="secondary" title="Align Center X">Mid</button>
+					<button id="btnAlignXMax" class="secondary" title="Align Right">Max</button>
+				</div>
+				
+				<!-- Y Axis -->
+				<div class="align-grid">
+					<span>Y</span>
+					<button id="btnAlignYMin" class="secondary" title="Align Bottom">Bot</button>
+					<button id="btnAlignYCenter" class="secondary" title="Align Center Y">Mid</button>
+					<button id="btnAlignYMax" class="secondary" title="Align Top">Top</button>
+				</div>
+				
+				<!-- Z Axis -->
+				<div class="align-grid">
+					<span>Z</span>
+					<button id="btnAlignZMin" class="secondary" title="Align Back">Min</button>
+					<button id="btnAlignZCenter" class="secondary" title="Align Center Z">Mid</button>
+					<button id="btnAlignZMax" class="secondary" title="Align Front">Max</button>
 				</div>
 			</div>
 			<div class="prop-group">

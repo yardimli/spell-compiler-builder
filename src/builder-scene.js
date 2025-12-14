@@ -308,6 +308,17 @@ export class BuilderScene {
 				this.isAltDown = false;
 			}
 		});
+		
+		// Fix for Alt-Tab sticking keys
+		window.addEventListener('blur', () => {
+			this.isCtrlDown = false;
+			this.isAltDown = false;
+		});
+		
+		window.addEventListener('focus', () => {
+			this.isCtrlDown = false;
+			this.isAltDown = false;
+		});
 	}
 	
 	setupInteraction () {

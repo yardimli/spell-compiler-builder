@@ -19,7 +19,8 @@ export class PropertyPanel {
 		
 		this.inputs = {
 			name: getEl('propName'),
-			lock: getEl('chkLock'), // New Lock Checkbox
+			lock: getEl('chkLock'),
+			tint: getEl('propTint'), // New Tint Input
 			pos: {
 				x: getEl('posX'),
 				y: getEl('posY'),
@@ -37,11 +38,17 @@ export class PropertyPanel {
 			}
 		};
 		
-		// Alignment Buttons
+		// Alignment Buttons (Expanded)
 		this.alignButtons = {
-			x: getEl('btnAlignX'),
-			y: getEl('btnAlignY'),
-			z: getEl('btnAlignZ')
+			xMin: getEl('btnAlignXMin'),
+			xCenter: getEl('btnAlignXCenter'),
+			xMax: getEl('btnAlignXMax'),
+			yMin: getEl('btnAlignYMin'),
+			yCenter: getEl('btnAlignYCenter'),
+			yMax: getEl('btnAlignYMax'),
+			zMin: getEl('btnAlignZMin'),
+			zCenter: getEl('btnAlignZCenter'),
+			zMax: getEl('btnAlignZMax')
 		};
 		
 		this.currentObjectId = null;
@@ -79,6 +86,15 @@ export class PropertyPanel {
 			};
 		}
 		
+		// Tint Color
+		if (this.inputs.tint) {
+			this.inputs.tint.onchange = (e) => {
+				if (this.currentObjectId) {
+					this.objectManager.updateObjectProperty(this.currentObjectId, 'color', e.target.value);
+				}
+			};
+		}
+		
 		// Position
 		['x', 'y', 'z'].forEach(axis => {
 			if (this.inputs.pos[axis]) this.inputs.pos[axis].onchange = () => this.emitTransformChange('position');
@@ -87,9 +103,17 @@ export class PropertyPanel {
 		});
 		
 		// Alignment
-		if (this.alignButtons.x) this.alignButtons.x.onclick = () => this.objectManager.alignSelection('x');
-		if (this.alignButtons.y) this.alignButtons.y.onclick = () => this.objectManager.alignSelection('y');
-		if (this.alignButtons.z) this.alignButtons.z.onclick = () => this.objectManager.alignSelection('z');
+		if (this.alignButtons.xMin) this.alignButtons.xMin.onclick = () => this.objectManager.alignSelection('x', 'min');
+		if (this.alignButtons.xCenter) this.alignButtons.xCenter.onclick = () => this.objectManager.alignSelection('x', 'center');
+		if (this.alignButtons.xMax) this.alignButtons.xMax.onclick = () => this.objectManager.alignSelection('x', 'max');
+		
+		if (this.alignButtons.yMin) this.alignButtons.yMin.onclick = () => this.objectManager.alignSelection('y', 'min');
+		if (this.alignButtons.yCenter) this.alignButtons.yCenter.onclick = () => this.objectManager.alignSelection('y', 'center');
+		if (this.alignButtons.yMax) this.alignButtons.yMax.onclick = () => this.objectManager.alignSelection('y', 'max');
+		
+		if (this.alignButtons.zMin) this.alignButtons.zMin.onclick = () => this.objectManager.alignSelection('z', 'min');
+		if (this.alignButtons.zCenter) this.alignButtons.zCenter.onclick = () => this.objectManager.alignSelection('z', 'center');
+		if (this.alignButtons.zMax) this.alignButtons.zMax.onclick = () => this.objectManager.alignSelection('z', 'max');
 		
 		// Delete
 		const btnDelete = document.getElementById('btnDeleteObj');
@@ -153,6 +177,11 @@ export class PropertyPanel {
 			if (this.inputs.lock) {
 				this.inputs.lock.checked = !!data.isLocked;
 				this.inputs.lock.indeterminate = false;
+			}
+			
+			// Tint Color
+			if (this.inputs.tint) {
+				this.inputs.tint.value = data.color || '#ffffff';
 			}
 			
 			// Position

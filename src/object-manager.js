@@ -77,14 +77,24 @@ export class ObjectManager {
 			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_FOLDER, filename, this.scene);
 			const root = result.meshes[0];
 			
-			// Normalize position based on bounds (pivot adjustment)
+			root.name = uniqueName;
+			
+			// Fix for Gap Issue:
+			// Ensure the mesh is normalized (scale/rotation) before calculating bounds
+			// and ensure we get the precise bottom of the visual geometry.
+			root.computeWorldMatrix(true);
+			result.meshes.forEach(m => m.computeWorldMatrix(true));
+			
+			// Calculate bounds of the hierarchy in its default state
 			const bounds = root.getHierarchyBoundingVectors();
 			const heightOffset = -bounds.min.y;
 			
-			root.name = uniqueName;
-			
 			// Apply position: Target X/Z + Base Y + Pivot Offset + Default Offset
-			root.position = new BABYLON.Vector3(targetX, baseY + heightOffset + this.defaultYOffset, targetZ);
+			if (this.selectedMeshes.length === 1) {
+				root.position = new BABYLON.Vector3(targetX, baseY, targetZ);
+			} else {
+				root.position = new BABYLON.Vector3(targetX, baseY + heightOffset + this.defaultYOffset, targetZ);
+			}
 			root.metadata = { id: id, isObject: true, file: filename };
 			
 			result.meshes.forEach(m => {
@@ -100,6 +110,7 @@ export class ObjectManager {
 				file: filename,
 				type: 'mesh',
 				isLocked: false,
+				color: '#ffffff', // Default color
 				position: root.position.asArray(),
 				rotation: root.rotationQuaternion ? root.rotationQuaternion.toEulerAngles().asArray() : root.rotation.asArray(),
 				scaling: root.scaling.asArray()
@@ -164,6 +175,7 @@ export class ObjectManager {
 					file: filename,
 					type: 'mesh',
 					isLocked: false,
+					color: '#ffffff',
 					position: mesh.position.asArray(),
 					rotation: mesh.rotationQuaternion ? mesh.rotationQuaternion.toEulerAngles().asArray() : mesh.rotation.asArray(),
 					scaling: mesh.scaling.asArray()
@@ -317,6 +329,11 @@ export class ObjectManager {
 					m.isPickable = true;
 					if (m !== newRoot) m.parent = newRoot;
 				});
+				
+				// Apply color if exists
+				if (originalData.color) {
+					this.applyColorToMesh(newRoot, originalData.color);
+				}
 			}
 			
 			const newData = {
@@ -325,6 +342,7 @@ export class ObjectManager {
 				type: originalData.type || 'mesh',
 				file: originalData.file,
 				isLocked: false, // Copies are unlocked by default
+				color: originalData.color || '#ffffff',
 				position: newRoot.position.asArray(),
 				rotation: newRoot.rotationQuaternion ? newRoot.rotationQuaternion.toEulerAngles().asArray() : newRoot.rotation.asArray(),
 				scaling: newRoot.scaling.asArray()
@@ -400,6 +418,10 @@ export class ObjectManager {
 					m.isPickable = true;
 					if (m !== root) m.parent = root;
 				});
+				
+				if (data.color) {
+					this.applyColorToMesh(root, data.color);
+				}
 				
 				this.placedObjects.push(data);
 			});
@@ -673,7 +695,13 @@ export class ObjectManager {
 		// Handle Locking
 		if (prop === 'isLocked') {
 			objData.isLocked = value;
-			// Removed auto-save call here
+			return;
+		}
+		
+		// Handle Color Tint
+		if (prop === 'color') {
+			objData.color = value;
+			this.applyColorToMesh(mesh, value);
 			return;
 		}
 		
@@ -730,20 +758,58 @@ export class ObjectManager {
 				const objData = this.placedObjects.find(o => o.id === mesh.metadata.id);
 				if (objData) objData.isLocked = value;
 			});
-			// Removed auto-save call here
 		}
 	}
 	
+	// Helper to apply color recursively
+	applyColorToMesh (root, hexColor) {
+		const color = BABYLON.Color3.FromHexString(hexColor);
+		const meshes = root.getChildMeshes(false);
+		// Include root if it has material
+		if (root.material) meshes.push(root);
+		
+		meshes.forEach(m => {
+			if (m.material) {
+				// Clone material to avoid affecting other instances sharing same material
+				if (!m.material.name.includes('_tinted')) {
+					m.material = m.material.clone(m.material.name + '_tinted');
+				}
+				
+				if (m.material instanceof BABYLON.PBRMaterial) {
+					m.material.albedoColor = color;
+				} else if (m.material instanceof BABYLON.StandardMaterial) {
+					m.material.diffuseColor = color;
+				}
+			}
+		});
+	}
+	
 	// Align Selected Objects
-	alignSelection(axis) {
+	// Mode: 'min', 'max', 'center'
+	alignSelection(axis, mode) {
 		if (this.selectedMeshes.length < 2) return;
 		
-		// 1. Calculate Average
-		let sum = 0;
+		// 1. Calculate Group Bounds
+		let groupMin = Number.MAX_VALUE;
+		let groupMax = -Number.MAX_VALUE;
+		
+		// We need to check the bounds of every selected object to find the extreme edges
 		this.selectedMeshes.forEach(m => {
-			sum += m.position[axis];
+			const bounds = m.getHierarchyBoundingVectors();
+			if (axis === 'x') {
+				if (bounds.min.x < groupMin) groupMin = bounds.min.x;
+				if (bounds.max.x > groupMax) groupMax = bounds.max.x;
+			} else if (axis === 'y') {
+				if (bounds.min.y < groupMin) groupMin = bounds.min.y;
+				if (bounds.max.y > groupMax) groupMax = bounds.max.y;
+			} else if (axis === 'z') {
+				if (bounds.min.z < groupMin) groupMin = bounds.min.z;
+				if (bounds.max.z > groupMax) groupMax = bounds.max.z;
+			}
 		});
-		const avg = sum / this.selectedMeshes.length;
+		
+		const groupCenter = (groupMin + groupMax) / 2;
+		const targetValue = (mode === 'min') ? groupMin : (mode === 'max') ? groupMax : groupCenter;
 		
 		// 2. Prepare Changes
 		const changes = [];
@@ -755,8 +821,22 @@ export class ObjectManager {
 			const objData = this.placedObjects.find(o => o.id === id);
 			if (objData && objData.isLocked) return;
 			
+			// Calculate this object's specific edge/center
+			const bounds = mesh.getHierarchyBoundingVectors();
+			let objValue;
+			
+			if (axis === 'x') {
+				objValue = (mode === 'min') ? bounds.min.x : (mode === 'max') ? bounds.max.x : (bounds.min.x + bounds.max.x) / 2;
+			} else if (axis === 'y') {
+				objValue = (mode === 'min') ? bounds.min.y : (mode === 'max') ? bounds.max.y : (bounds.min.y + bounds.max.y) / 2;
+			} else if (axis === 'z') {
+				objValue = (mode === 'min') ? bounds.min.z : (mode === 'max') ? bounds.max.z : (bounds.min.z + bounds.max.z) / 2;
+			}
+			
+			const delta = targetValue - objValue;
+			
 			// Skip if already aligned (float tolerance)
-			if (Math.abs(mesh.position[axis] - avg) < 0.001) return;
+			if (Math.abs(delta) < 0.001) return;
 			
 			const oldData = {
 				position: mesh.position.asArray(),
@@ -765,7 +845,9 @@ export class ObjectManager {
 			};
 			
 			// Apply to Mesh
-			mesh.position[axis] = avg;
+			if (axis === 'x') mesh.position.x += delta;
+			if (axis === 'y') mesh.position.y += delta;
+			if (axis === 'z') mesh.position.z += delta;
 			
 			const newData = {
 				position: mesh.position.asArray(),
