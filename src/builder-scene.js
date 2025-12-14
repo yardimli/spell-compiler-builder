@@ -27,6 +27,7 @@ export class BuilderScene {
 		
 		// Input State
 		this.isCtrlDown = false;
+		this.isAltDown = false;
 	}
 	
 	async init () {
@@ -43,11 +44,16 @@ export class BuilderScene {
 		
 		// 3. Camera
 		this.camera = new BABYLON.ArcRotateCamera('EditorCamera', -Math.PI / 2, Math.PI / 3, 50, BABYLON.Vector3.Zero(), this.scene);
-		// Don't attach control immediately, wait for Ctrl key logic
+		// Don't attach control immediately, wait for Key logic
 		this.camera.wheelPrecision = 50;
 		this.camera.panningSensibility = 50;
 		this.camera.lowerRadiusLimit = 2;
 		this.camera.upperRadiusLimit = 200;
+		
+		// --- Camera Input Configuration ---
+		// We will toggle useCtrlForPanning dynamically in setupKeyboardControls
+		// Default to false so standard attachControl uses Left Click for Orbit
+		this.camera.useCtrlForPanning = false;
 		
 		// 4. Lights
 		const hemiLight = new BABYLON.HemisphericLight('hemiLight', new BABYLON.Vector3(0, 1, 0), this.scene);
@@ -198,20 +204,44 @@ export class BuilderScene {
 	}
 	
 	setupKeyboardControls () {
-		// Toggle Camera controls based on Ctrl key
-		window.addEventListener('keydown', (e) => {
-			if (e.key === 'Control' && !this.isCtrlDown) {
-				this.isCtrlDown = true;
-				// Attach camera controls only when Ctrl is pressed
+		const updateCameraState = () => {
+			// Always detach first to ensure clean state
+			this.camera.detachControl();
+			
+			if (this.isCtrlDown) {
+				// Ctrl + Left Click = Pan
+				this.camera.useCtrlForPanning = true;
 				this.camera.attachControl(this.canvas, true);
+			} else if (this.isAltDown) {
+				// Alt + Left Click = Orbit
+				// We disable useCtrlForPanning, so Left Click maps to Orbit (default)
+				this.camera.useCtrlForPanning = false;
+				this.camera.attachControl(this.canvas, true);
+			}
+		};
+		
+		window.addEventListener('keydown', (e) => {
+			if (e.key === 'Control') {
+				if (!this.isCtrlDown) {
+					this.isCtrlDown = true;
+					updateCameraState();
+				}
+			} else if (e.key === 'Alt') {
+				if (!this.isAltDown) {
+					this.isAltDown = true;
+					e.preventDefault(); // Prevent browser menu focus
+					updateCameraState();
+				}
 			}
 		});
 		
 		window.addEventListener('keyup', (e) => {
 			if (e.key === 'Control') {
 				this.isCtrlDown = false;
-				// Detach camera controls when Ctrl is released
-				this.camera.detachControl();
+				updateCameraState();
+			} else if (e.key === 'Alt') {
+				this.isAltDown = false;
+				updateCameraState();
 			}
 		});
 		
@@ -239,6 +269,9 @@ export class BuilderScene {
 	}
 	
 	handlePointerDown (info) {
+		// If manipulating camera, do not select/drag objects
+		if (this.isCtrlDown || this.isAltDown) return;
+		
 		const pick = info.pickInfo;
 		const isMultiSelect = info.event.shiftKey;
 		

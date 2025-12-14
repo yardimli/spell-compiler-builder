@@ -1,28 +1,53 @@
 #TODO
 
-
-#TODO 5
-
-- make pan and zoom with mouse only work when ctrl key is pressed
-- enable multi-selection of objects, shift key to be pressed to use mouse for multi-selection
-- allow moving multiple selected objects at the same time
-- allow deleting multiple selected objects at the same time
-- when multiple objects are selected highlight all of the selected objects
-- when multiple objects are selected in property panel show a list of all selected objects
-- allow duplicating multiple selected objects at the same time (duplicate button in the property panel when multiple objects are selected)
-
 #TODO 6
 
 - when adding new objects if an object is already selected add the new object on top of the selected object
 - allow user to lock existing objects so they cant be moved or deleted (in property panel add a lock toggle)
-- save current map to local storage so it persists between sessions
-- allow to add a grid of objects, when adding right click on the objects sidebar add an option to add a grid of objects (specify rows and columns)
+- allow user to select multiple objects and lock them all at once
+- save current map to local storage so it persists between sessions (checkbox in global settings modal to enable/disable this feature, enabled by default)
+- allow to add a grid of objects, when adding right click on the objects sidebar add an option to add a grid of objects (specify rows and columns), the objects should touch each other without gaps
 
 #TODO 7
 
-- add lighting buttons to the UI to toggle different light setups (daylight, night, indoor)
-- allow loading skybox textures from local files for the canvas background (implement in global settings modal)
+- make light button open a dropdown with Pointlight, DirectionalLight, HemisphericLight
+- add property panel for lights to adjust color diffuse and specular for all 3 types and groundColor for HemisphericLight
+- add property panel for lights to adjust location for Pointlight
+- add property panel for lights to adjust direction for DirectionalLight and HemisphericLight
 
+
+- allow enabling disabling skybox (implement in global settings modal)
+var createScene = function () {
+    var scene = new BABYLON.Scene(engine);
+    var camera = new BABYLON.ArcRotateCamera("Camera", -Math.PI / 2,  Math.PI / 2, 5, BABYLON.Vector3.Zero(), scene);
+    camera.attachControl(canvas, true);
+
+	var light = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(-1, 1, 0), scene);
+	light.diffuse = new BABYLON.Color3(1, 0, 0);
+
+	// Skybox
+	var skybox = BABYLON.MeshBuilder.CreateBox("skyBox", {size:1000.0}, scene);
+	var skyboxMaterial = new BABYLON.StandardMaterial("skyBox", scene);
+	skyboxMaterial.backFaceCulling = false;
+	skyboxMaterial.reflectionTexture = new BABYLON.CubeTexture("textures/skybox", scene);
+	skyboxMaterial.reflectionTexture.coordinatesMode = BABYLON.Texture.SKYBOX_MODE;
+	skyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
+	skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+	skybox.material = skyboxMaterial;
+
+    return scene;
+
+};
+export default createScene
+
+
+#TODO 8
+
+- add object grouping functionality, allow user to group multiple selected objects into a single group (add group button in property panel when multiple objects are selected)
+- only allow one level of grouping (no nested groups)
+- add a object tree view that can be turned on/off it will use absolute positioning on the right side of the screen to show all objects and groups in a hierarchical view.
+- clicking on an object or group in the tree view will select it in the canvas
+- allow renaming groups in the tree view
 
 #DONE
 
@@ -52,3 +77,13 @@
 in the grid make the current size 50% smaller for how each grid size is rendered
 
 - bug: undo doesnt work properly after deleting an object or moving an object
+
+#TODO 5
+
+- make pan and zoom with mouse only work when ctrl key is pressed
+- enable multi-selection of objects, shift key to be pressed to use mouse for multi-selection
+- allow moving multiple selected objects at the same time
+- allow deleting multiple selected objects at the same time
+- when multiple objects are selected highlight all of the selected objects
+- when multiple objects are selected in property panel show a list of all selected objects
+- allow duplicating multiple selected objects at the same time (duplicate button in the property panel when multiple objects are selected)

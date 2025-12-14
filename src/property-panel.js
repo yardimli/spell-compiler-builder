@@ -104,6 +104,7 @@ export class PropertyPanel {
 		if (!this.panel) return;
 		
 		this.isUpdatingUI = true;
+		const btnDuplicate = document.getElementById('btnDuplicate');
 		
 		if (!dataArray || dataArray.length === 0) {
 			this.panel.style.display = 'none';
@@ -113,6 +114,8 @@ export class PropertyPanel {
 			this.panel.style.display = 'flex';
 			this.singleView.style.display = 'block';
 			this.multiView.style.display = 'none';
+			
+			if (btnDuplicate) btnDuplicate.innerText = "Duplicate Object";
 			
 			const data = dataArray[0];
 			this.currentObjectId = data.id;
@@ -138,6 +141,8 @@ export class PropertyPanel {
 			this.panel.style.display = 'flex';
 			this.singleView.style.display = 'none';
 			this.multiView.style.display = 'block';
+			
+			if (btnDuplicate) btnDuplicate.innerText = `Duplicate Selected (${dataArray.length})`;
 			
 			this.currentObjectId = null;
 			
