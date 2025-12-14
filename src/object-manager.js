@@ -815,6 +815,114 @@ export class ObjectManager {
 		this.updateSelectionProxy();
 	}
 	
+	// --- New Method: Snap Selection Side-by-Side ---
+	snapSelection(axis) {
+		if (this.selectedMeshes.length < 2) return;
+		
+		// 1. Detach Proxy to handle individual transforms
+		if (this.selectionProxy) {
+			this.selectedMeshes.forEach(m => m.setParent(null));
+			this.selectionProxy.dispose();
+			this.selectionProxy = null;
+			this.gizmoManager.attachToMesh(null);
+		}
+		
+		// 2. Capture State for Undo
+		const changes = [];
+		this.selectedMeshes.forEach(mesh => {
+			changes.push({
+				id: mesh.metadata.id,
+				oldData: {
+					position: mesh.absolutePosition.asArray(),
+					rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),
+					scaling: mesh.absoluteScaling.asArray()
+				},
+				newData: null // Filled later
+			});
+		});
+		
+		// 3. Sort Meshes along axis
+		// We need to calculate current bounds to sort
+		const meshesWithBounds = this.selectedMeshes.map(mesh => {
+			mesh.computeWorldMatrix(true);
+			return {
+				mesh: mesh,
+				bounds: mesh.getHierarchyBoundingVectors()
+			};
+		});
+		
+		meshesWithBounds.sort((a, b) => {
+			return a.bounds.min[axis] - b.bounds.min[axis];
+		});
+		
+		// 4. Apply Spacing
+		// We keep the first one where it is.
+		let currentEdge = meshesWithBounds[0].bounds.max[axis];
+		
+		for (let i = 1; i < meshesWithBounds.length; i++) {
+			const item = meshesWithBounds[i];
+			const mesh = item.mesh;
+			
+			// Calculate width/height/depth of current item
+			const dim = item.bounds.max[axis] - item.bounds.min[axis];
+			
+			// We want item.min[axis] to be currentEdge
+			// The shift required:
+			const currentMin = item.bounds.min[axis];
+			const shift = currentEdge - currentMin;
+			
+			// Apply shift
+			mesh.position[axis] += shift;
+			
+			// Update currentEdge for next iteration
+			// The new max is the new min (currentEdge) + dimension
+			currentEdge += dim;
+			
+			// Update World Matrix for safety (though we are just adding to position)
+			mesh.computeWorldMatrix(true);
+		}
+		
+		// 5. Update Undo Data & Internal State
+		changes.forEach(change => {
+			const mesh = this.findMeshById(change.id);
+			const objData = this.placedObjects.find(o => o.id === change.id);
+			
+			const newData = {
+				position: mesh.absolutePosition.asArray(),
+				rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),
+				scaling: mesh.absoluteScaling.asArray()
+			};
+			
+			change.newData = newData;
+			
+			// Update internal model
+			if (objData) {
+				objData.position = newData.position;
+			}
+		});
+		
+		// Filter out no-ops (first item usually)
+		const actualChanges = changes.filter(c =>
+			JSON.stringify(c.oldData) !== JSON.stringify(c.newData)
+		);
+		
+		if (actualChanges.length > 0) {
+			this.undoRedo.add({
+				type: 'TRANSFORM',
+				data: actualChanges
+			});
+			
+			// Update UI if needed
+			if (this.onSelectionChange) {
+				const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
+				this.onSelectionChange(selectedData);
+			}
+		}
+		
+		// 6. Re-attach Proxy
+		this.updateSelectionProxy();
+	}
+	
 	updateObjectTransform (id, data) {
 		// When undoing, we might need to detach proxy to set absolute values correctly
 		if (this.selectionProxy) {

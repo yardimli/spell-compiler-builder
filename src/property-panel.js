@@ -58,6 +58,13 @@ export class PropertyPanel {
 			zMax: getEl('btnAlignZMax')
 		};
 		
+		// Spacing Buttons (New)
+		this.snapButtons = {
+			x: getEl('btnSnapX'),
+			y: getEl('btnSnapY'),
+			z: getEl('btnSnapZ')
+		};
+		
 		this.currentObjectId = null;
 		this.isUpdatingUI = false;
 		
@@ -146,6 +153,11 @@ export class PropertyPanel {
 		if (this.alignButtons.zMin) this.alignButtons.zMin.onclick = () => this.objectManager.alignSelection('z', 'min');
 		if (this.alignButtons.zCenter) this.alignButtons.zCenter.onclick = () => this.objectManager.alignSelection('z', 'center');
 		if (this.alignButtons.zMax) this.alignButtons.zMax.onclick = () => this.objectManager.alignSelection('z', 'max');
+		
+		// Spacing
+		if (this.snapButtons.x) this.snapButtons.x.onclick = () => this.objectManager.snapSelection('x');
+		if (this.snapButtons.y) this.snapButtons.y.onclick = () => this.objectManager.snapSelection('y');
+		if (this.snapButtons.z) this.snapButtons.z.onclick = () => this.objectManager.snapSelection('z');
 		
 		// Delete
 		const btnDelete = document.getElementById('btnDeleteObj');
