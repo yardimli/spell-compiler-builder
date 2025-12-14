@@ -1,6 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
-import { loadAssets } from './loader';
+// Removed automatic loadAssets import
 import { ObjectManager } from './object-manager';
 
 export class BuilderScene {
@@ -28,6 +28,9 @@ export class BuilderScene {
 		// Input State
 		this.isCtrlDown = false;
 		this.isAltDown = false;
+		
+		// Thumbnail Generation State
+		this.savedState = null;
 	}
 	
 	async init () {
@@ -90,7 +93,67 @@ export class BuilderScene {
 			this.engine.resize();
 		});
 		
-		return await loadAssets(this.engine);
+		// Note: Assets are no longer loaded here automatically
+		return [];
+	}
+	
+	// --- Camera Locking ---
+	setCameraLocked (isLocked) {
+		if (isLocked) {
+			this.camera.detachControl();
+		} else {
+			this.camera.attachControl(this.canvas, true);
+		}
+	}
+	
+	// --- Thumbnail Generation Helpers ---
+	prepareForThumbnailGeneration () {
+		// Save current state
+		this.savedState = {
+			cameraAlpha: this.camera.alpha,
+			cameraBeta: this.camera.beta,
+			cameraRadius: this.camera.radius,
+			cameraTarget: this.camera.target.clone(),
+			gridEnabled: this.groundMesh.isEnabled(),
+			cursorEnabled: this.cursorMesh.isEnabled(),
+			clearColor: this.scene.clearColor.clone()
+		};
+		
+		// Hide Grid and Cursor
+		this.groundMesh.setEnabled(false);
+		this.cursorMesh.setEnabled(false);
+		
+		// Hide all placed objects
+		this.objectManager.placedObjects.forEach(obj => {
+			const mesh = this.objectManager.findMeshById(obj.id);
+			if (mesh) mesh.setEnabled(false);
+		});
+		
+		// Set transparent background for screenshot
+		this.scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
+	}
+	
+	restoreAfterThumbnailGeneration () {
+		if (!this.savedState) return;
+		
+		// Restore Camera
+		this.camera.alpha = this.savedState.cameraAlpha;
+		this.camera.beta = this.savedState.cameraBeta;
+		this.camera.radius = this.savedState.cameraRadius;
+		this.camera.setTarget(this.savedState.cameraTarget);
+		
+		// Restore Visibility
+		this.groundMesh.setEnabled(this.savedState.gridEnabled);
+		this.cursorMesh.setEnabled(this.savedState.cursorEnabled);
+		this.scene.clearColor = this.savedState.clearColor;
+		
+		// Restore objects
+		this.objectManager.placedObjects.forEach(obj => {
+			const mesh = this.objectManager.findMeshById(obj.id);
+			if (mesh) mesh.setEnabled(true);
+		});
+		
+		this.savedState = null;
 	}
 	
 	// --- New Camera Reset Method ---
@@ -173,24 +236,24 @@ export class BuilderScene {
 	}
 	
 	// Helper to darken/lighten hex color for gradient
-	shadeColor(color, percent) {
-		let R = parseInt(color.substring(1,3),16);
-		let G = parseInt(color.substring(3,5),16);
-		let B = parseInt(color.substring(5,7),16);
+	shadeColor (color, percent) {
+		let R = parseInt(color.substring(1, 3), 16);
+		let G = parseInt(color.substring(3, 5), 16);
+		let B = parseInt(color.substring(5, 7), 16);
 		
 		R = parseInt(R * (100 + percent) / 100);
 		G = parseInt(G * (100 + percent) / 100);
 		B = parseInt(B * (100 + percent) / 100);
 		
-		R = (R<255)?R:255;
-		G = (G<255)?G:255;
-		B = (B<255)?B:255;
+		R = (R < 255) ? R : 255;
+		G = (G < 255) ? G : 255;
+		B = (B < 255) ? B : 255;
 		
-		const RR = ((R.toString(16).length===1)?"0"+R.toString(16):R.toString(16));
-		const GG = ((G.toString(16).length===1)?"0"+G.toString(16):G.toString(16));
-		const BB = ((B.toString(16).length===1)?"0"+B.toString(16):B.toString(16));
+		const RR = ((R.toString(16).length === 1) ? '0' + R.toString(16) : R.toString(16));
+		const GG = ((G.toString(16).length === 1) ? '0' + G.toString(16) : G.toString(16));
+		const BB = ((B.toString(16).length === 1) ? '0' + B.toString(16) : B.toString(16));
 		
-		return "#"+RR+GG+BB;
+		return '#' + RR + GG + BB;
 	}
 	
 	setGridColors (lineColor, bgColor) {

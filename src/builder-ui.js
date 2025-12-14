@@ -1,4 +1,5 @@
 import { PropertyPanel } from './property-panel';
+import { loadAssets } from './loader';
 
 export class BuilderUI {
 	constructor (builderScene) {
@@ -43,7 +44,13 @@ export class BuilderUI {
 			this.manager.loadFromAutoSave();
 		}
 		
-		this.buildSidebar(assets);
+		// If assets are provided (e.g. preloaded), build sidebar, otherwise show load button
+		if (assets && assets.length > 0) {
+			this.buildSidebar(assets);
+		} else {
+			this.setupLoadButton();
+		}
+		
 		this.setupControls();
 		this.setupHistoryUI();
 		this.setupSettingsModal();
@@ -51,9 +58,45 @@ export class BuilderUI {
 		this.setupAutoSaveTimer(); // Initialize timer
 	}
 	
+	setupLoadButton () {
+		const btnLoad = document.getElementById('btnLoadAssets');
+		const loadArea = document.getElementById('asset-load-area');
+		const overlay = document.getElementById('loading-overlay');
+		
+		if (btnLoad) {
+			btnLoad.onclick = async () => {
+				// 1. Lock UI and Camera
+				overlay.style.display = 'flex';
+				this.scene.setCameraLocked(true);
+				
+				// 2. Prepare Scene (Hide grid, hide existing objects)
+				this.scene.prepareForThumbnailGeneration();
+				
+				try {
+					// 3. Load Assets (Pass scene and camera for thumbnail generation)
+					const assets = await loadAssets(this.scene.scene, this.scene.camera);
+					
+					// 4. Restore Scene
+					this.scene.restoreAfterThumbnailGeneration();
+					
+					// 5. Update UI
+					loadArea.style.display = 'none';
+					this.buildSidebar(assets);
+				} catch (e) {
+					console.error('Failed to load assets:', e);
+					alert('Error loading assets. Check console.');
+					this.scene.restoreAfterThumbnailGeneration();
+				} finally {
+					// 6. Unlock
+					this.scene.setCameraLocked(false);
+					overlay.style.display = 'none';
+				}
+			};
+		}
+	}
+	
 	// --- Auto Save Logic ---
 	setupAutoSaveTimer () {
-		const saveText = document.getElementById('auto-save-text');
 		const btnSaveNow = document.getElementById('btnSaveNow');
 		
 		// Define the save action
@@ -92,12 +135,12 @@ export class BuilderUI {
 		if (!saveText) return;
 		
 		if (!this.globalSettings.autoSave) {
-			saveText.innerText = "Auto-save disabled";
+			saveText.innerText = 'Auto-save disabled';
 			return;
 		}
 		
 		if (!this.lastSaveTime) {
-			saveText.innerText = "Not saved yet.";
+			saveText.innerText = 'Not saved yet.';
 		} else {
 			const diff = Math.floor((Date.now() - this.lastSaveTime) / 1000);
 			if (diff < 60) {
@@ -149,6 +192,7 @@ export class BuilderUI {
 	// --- Sidebar Logic ---
 	buildSidebar (assets) {
 		const listContainer = document.getElementById('asset-list');
+		// Clear previous content (including the load button area)
 		listContainer.innerHTML = '';
 		
 		// Load collapsed state
@@ -421,7 +465,7 @@ export class BuilderUI {
 				this.manager.addAssetGrid(targetFile, this.scene.selectedCellPosition, r, c);
 				closeGridModal();
 			} else {
-				alert("Please enter valid positive numbers for rows and columns.");
+				alert('Please enter valid positive numbers for rows and columns.');
 			}
 		};
 		
