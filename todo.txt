@@ -1,17 +1,37 @@
 #TODO
 
 #TODO 8
+- create a new js file for managing object groups called tree-view.js
+- add a object tree view that can be turned collapsed or full height of the screen. it will use absolute positioning on the right side of the screen and show on top of the canvas when open. it will show all objects and groups in a hierarchical view.
 - add object grouping functionality, allow user to group multiple selected objects into a single group (add group button in property panel when multiple objects are selected)
 - only allow one level of grouping (no nested groups)
 - groups are for management dont add any hierarchy to the scene itself
-- add a object tree view that can be turned on/off it will use absolute positioning on the right side of the screen to show all objects and groups in a hierarchical view.
 - clicking on an object or group in the tree view will select it in the canvas
 - allow renaming groups in the tree view
-- allow user to select multiple objects in the tree view using shift key, either inside a group or those outside but dont allow to mix objects inside groups with those outside or groups themselves
-- when user clicks on a group name in the tree view it will select all objects inside that group
+- allow user to select multiple objects in the tree view using shift key
+- when user clicks on a group name in the tree view it will select all objects inside that group on the tree view and the canvas
+- allow deleting groups from tree view (deleting a group will not delete the objects inside just ungroup them)
+
+BUG: deleting an asset breaks the tree view with error
+cannot read properties of null (reading 'id')
+TypeError: Cannot read properties of null (reading 'id')
+    at eval (webpack://babylon-havok-project/./src/tree-view.js?:60:124)
+    at Array.find (<anonymous>)
+    at eval (webpack://babylon-havok-project/./src/tree-view.js?:60:94)
+    at Array.map (<anonymous>)
+    at TreeView.render (webpack://babylon-havok-project/./src/tree-view.js?:60:58)
+    at TreeView.manager.onListChange (webpack://babylon-havok-project/./src/tree-view.js?:19:46)
+    at ObjectManager.deleteSelected (webpack://babylon-havok-project/./src/object-manager.js?:383:33)
+    at btnDelete.onclick (webpack://babylon-havok-project/./src/property-panel.js?:183:28)
+- allow user to drag an asset on the tree view into a group to add it to that group
+- allow user to drag an asset out of a group to ungroup it
+- groups should be collapsible in the tree view
+- allow selecting multiple groups
+- disable text selection in the tree view when clicking and dragging to select multiple items as it is confusing
+
+
 - locked items on the canvas should not be selectable from the canvas only treeview should select them
 - in tree view show icon next to locked items
-- allow deleting groups from tree view (deleting a group will not delete the objects inside just ungroup them)
 
 
 #TODO 9

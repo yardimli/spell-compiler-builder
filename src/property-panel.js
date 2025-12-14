@@ -65,6 +65,9 @@ export class PropertyPanel {
 			z: getEl('btnSnapZ')
 		};
 		
+		// Group Button
+		this.btnCreateGroup = getEl('btnCreateGroup');
+		
 		this.currentObjectId = null;
 		this.isUpdatingUI = false;
 		
@@ -161,6 +164,14 @@ export class PropertyPanel {
 		if (this.snapButtons.x) this.snapButtons.x.onclick = () => this.objectManager.snapSelection('x');
 		if (this.snapButtons.y) this.snapButtons.y.onclick = () => this.objectManager.snapSelection('y');
 		if (this.snapButtons.z) this.snapButtons.z.onclick = () => this.objectManager.snapSelection('z');
+		
+		// Grouping
+		if (this.btnCreateGroup) {
+			this.btnCreateGroup.onclick = () => {
+				const selectedIds = this.objectManager.selectedMeshes.map(m => m.metadata.id);
+				this.objectManager.createGroup(null, selectedIds);
+			};
+		}
 		
 		// Delete
 		const btnDelete = document.getElementById('btnDeleteObj');

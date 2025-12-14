@@ -11,6 +11,7 @@ export class ObjectManager {
 		
 		// State
 		this.placedObjects = []; // Array of metadata objects
+		this.groups = []; // Array of { id, name, objectIds: [] }
 		this.selectedMeshes = []; // Array of currently selected Babylon Meshes
 		this.selectionProxy = null; // TransformNode for multi-selection group transforms
 		
@@ -25,6 +26,7 @@ export class ObjectManager {
 		
 		// Events
 		this.onSelectionChange = null; // Callback for UI
+		this.onListChange = null; // Callback for TreeView
 		
 		// Gizmo Manager
 		this.gizmoManager = new BABYLON.GizmoManager(this.scene);
@@ -53,9 +55,6 @@ export class ObjectManager {
 		this.gizmoManager.clearGizmoOnEmptyPointerEvent = true;
 		
 		// --- Undo/Redo Logic for All Gizmos ---
-		// We hook into the active gizmo's drag events to record state.
-		// Since we can switch modes, we need a generic handler or hook all.
-		
 		const setupDragEvents = (gizmoType) => {
 			const gizmo = this.gizmoManager.gizmos[gizmoType];
 			if (!gizmo) return;
@@ -83,8 +82,6 @@ export class ObjectManager {
 					const startData = this.dragStartData.find(d => d.id === id);
 					if (!startData) return;
 					
-					// Get current absolute values
-					// Note: If parented to proxy, absolutePosition handles the math
 					const currentPos = mesh.absolutePosition;
 					const currentRot = mesh.absoluteRotationQuaternion.toEulerAngles();
 					const currentScale = mesh.absoluteScaling;
@@ -95,9 +92,8 @@ export class ObjectManager {
 						scaling: currentScale.asArray()
 					};
 					
-					// Check if changed (simple stringify check)
+					// Check if changed
 					if (JSON.stringify(currentData) !== JSON.stringify(startData)) {
-						// Update internal data model immediately
 						const objIndex = this.placedObjects.findIndex(o => o.id === id);
 						if (objIndex !== -1) {
 							this.placedObjects[objIndex].position = currentData.position;
@@ -123,7 +119,6 @@ export class ObjectManager {
 						data: changes
 					});
 					
-					// Update UI if single selection
 					if (this.selectedMeshes.length === 1 && this.onSelectionChange) {
 						const data = this.placedObjects.find(o => o.id === this.selectedMeshes[0].metadata.id);
 						this.onSelectionChange([data]);
@@ -147,17 +142,61 @@ export class ObjectManager {
 	}
 	
 	updateGizmoSettings () {
-		// Enable only the active gizmo
 		this.gizmoManager.positionGizmoEnabled = (this.gizmoMode === 'position');
 		this.gizmoManager.rotationGizmoEnabled = (this.gizmoMode === 'rotation');
 		this.gizmoManager.scaleGizmoEnabled = (this.gizmoMode === 'scaling');
+	}
+	
+	// --- Group Management ---
+	
+	createGroup (name, objectIds) {
+		if (!objectIds || objectIds.length === 0) return;
+		
+		// 1. Remove these objects from any existing groups (One level only)
+		this.groups.forEach(g => {
+			g.objectIds = g.objectIds.filter(id => !objectIds.includes(id));
+		});
+		// Clean up empty groups
+		this.groups = this.groups.filter(g => g.objectIds.length > 0);
+		
+		// 2. Create new group
+		const groupId = BABYLON.Tools.RandomId();
+		const newGroup = {
+			id: groupId,
+			name: name || `Group_${this.groups.length + 1}`,
+			objectIds: [...objectIds]
+		};
+		
+		this.groups.push(newGroup);
+		
+		if (this.onListChange) this.onListChange();
+		
+		// Select the new group implicitly by selecting its items
+		this.selectObjectsByIds(objectIds);
+	}
+	
+	deleteGroup (groupId) {
+		// Just removes the group definition, objects remain (ungroup)
+		this.groups = this.groups.filter(g => g.id !== groupId);
+		if (this.onListChange) this.onListChange();
+	}
+	
+	renameGroup (groupId, newName) {
+		const group = this.groups.find(g => g.id === groupId);
+		if (group) {
+			group.name = newName;
+			if (this.onListChange) this.onListChange();
+		}
+	}
+	
+	getGroupOfObject (objectId) {
+		return this.groups.find(g => g.objectIds.includes(objectId));
 	}
 	
 	// --- Object Management ---
 	
 	async addAsset (filename, position) {
 		try {
-			// STACKING LOGIC: Check if a single object is selected to stack on top
 			let targetX = position.x;
 			let targetZ = position.z;
 			let baseY = position.y;
@@ -226,6 +265,7 @@ export class ObjectManager {
 			this.selectObject(root, false);
 			
 			this.undoRedo.add({ type: 'ADD', data: [objData] });
+			if (this.onListChange) this.onListChange();
 		} catch (err) {
 			console.error('Error adding asset:', err);
 		}
@@ -301,6 +341,7 @@ export class ObjectManager {
 			});
 			
 			this.undoRedo.add({ type: 'ADD', data: addedObjectsData });
+			if (this.onListChange) this.onListChange();
 		} catch (e) {
 			console.error('Grid spawn error:', e);
 		}
@@ -335,6 +376,7 @@ export class ObjectManager {
 		this.placedObjects.push(objData);
 		this.selectObject(light, false);
 		this.undoRedo.add({ type: 'ADD', data: [objData] });
+		if (this.onListChange) this.onListChange();
 	}
 	
 	deleteSelected () {
@@ -356,11 +398,19 @@ export class ObjectManager {
 			}
 		});
 		
+		// Remove deleted objects from any groups
+		this.groups.forEach(g => {
+			g.objectIds = g.objectIds.filter(id => !deletedIds.includes(id));
+		});
+		// Cleanup empty groups
+		this.groups = this.groups.filter(g => g.objectIds.length > 0);
+		
 		if (deletedData.length > 0) {
 			this.undoRedo.add({ type: 'DELETE', data: deletedData });
 		}
 		
 		this.onSelectionChange(null);
+		if (this.onListChange) this.onListChange();
 	}
 	
 	duplicateSelection () {
@@ -380,7 +430,6 @@ export class ObjectManager {
 			const newName = `${baseName}_copy_${Math.floor(Math.random() * 1000)}`;
 			
 			const offset = new BABYLON.Vector3(0.5, 0, 0.5);
-			// Use absolute position for cloning
 			const newPos = originalMesh.absolutePosition.clone().add(offset);
 			
 			let newRoot;
@@ -401,7 +450,6 @@ export class ObjectManager {
 				newRoot = originalMesh.instantiateHierarchy(null, { doNotInstantiate: true });
 				newRoot.name = newName;
 				newRoot.position = newPos;
-				// Ensure we copy rotation/scale correctly if original was parented
 				newRoot.rotationQuaternion = originalMesh.absoluteRotationQuaternion.clone();
 				newRoot.scaling = originalMesh.absoluteScaling.clone();
 				
@@ -438,11 +486,11 @@ export class ObjectManager {
 			newMeshes.push(newRoot);
 		});
 		
-		// Reset selection to new objects
-		this.selectObject(null, false); // Clears proxy
+		this.selectObject(null, false);
 		newMeshes.forEach(m => this.selectObject(m, true));
 		
 		this.undoRedo.add({ type: 'ADD', data: newObjectsData });
+		if (this.onListChange) this.onListChange();
 	}
 	
 	removeObjectById (id, clearSelection = true) {
@@ -471,6 +519,7 @@ export class ObjectManager {
 			sphere.setParent(light);
 			
 			this.placedObjects.push(data);
+			if (this.onListChange) this.onListChange(); // Trigger update for sync items
 		} else {
 			BABYLON.SceneLoader.ImportMeshAsync('', ASSET_FOLDER, data.file, this.scene).then(res => {
 				const root = res.meshes[0];
@@ -492,16 +541,13 @@ export class ObjectManager {
 				}
 				
 				this.placedObjects.push(data);
+				if (this.onListChange) this.onListChange(); // Trigger update for async items
 			});
 		}
 	}
 	
-	// --- New Helper for Undo/Redo Selection ---
 	selectObjectsByIds (ids) {
-		// Clear current selection
 		this.selectObject(null, false);
-		
-		// Find and select objects from the ID list
 		const meshesToSelect = [];
 		ids.forEach(id => {
 			const mesh = this.findMeshById(id);
@@ -511,7 +557,6 @@ export class ObjectManager {
 		});
 		
 		if (meshesToSelect.length > 0) {
-			// Select first one to init, then others as multi-select
 			this.selectObject(meshesToSelect[0], false);
 			for (let i = 1; i < meshesToSelect.length; i++) {
 				this.selectObject(meshesToSelect[i], true);
@@ -520,13 +565,11 @@ export class ObjectManager {
 	}
 	
 	selectObject (mesh, isMultiSelect) {
-		// Handle clicking sub-meshes
 		if (mesh && mesh.parent && mesh.parent.metadata && mesh.parent.metadata.isObject) {
 			mesh = mesh.parent;
 		}
 		
 		if (!isMultiSelect) {
-			// Single Select Mode: Clear previous
 			this.selectedMeshes.forEach(m => this.setSelectionHighlight(m, false));
 			this.selectedMeshes = [];
 			
@@ -535,7 +578,6 @@ export class ObjectManager {
 				this.setSelectionHighlight(mesh, true);
 			}
 		} else {
-			// Multi Select Mode
 			if (mesh) {
 				const index = this.selectedMeshes.indexOf(mesh);
 				if (index !== -1) {
@@ -550,7 +592,6 @@ export class ObjectManager {
 		
 		this.updateSelectionProxy();
 		
-		// Update UI
 		if (this.onSelectionChange) {
 			if (this.selectedMeshes.length > 0) {
 				const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
@@ -561,12 +602,8 @@ export class ObjectManager {
 		}
 	}
 	
-	// Handles creating/destroying the proxy node for multi-selection
 	updateSelectionProxy () {
-		// 1. Cleanup existing proxy
 		if (this.selectionProxy) {
-			// Unparent children (restores world transform)
-			// Note: We must be careful not to leave them parented to disposed node
 			const children = this.selectionProxy.getChildren();
 			children.forEach(c => c.setParent(null));
 			
@@ -575,13 +612,11 @@ export class ObjectManager {
 			this.selectionProxy = null;
 		}
 		
-		// 2. Setup new state
 		if (this.selectedMeshes.length === 0) {
 			this.gizmoManager.attachToMesh(null);
 			return;
 		}
 		
-		// Check if all selected are locked
 		const allLocked = this.selectedMeshes.every(m => {
 			const data = this.placedObjects.find(o => o.id === m.metadata.id);
 			return data && data.isLocked;
@@ -593,13 +628,10 @@ export class ObjectManager {
 		}
 		
 		if (this.selectedMeshes.length === 1) {
-			// Single Object: Attach directly
 			this.gizmoManager.attachToMesh(this.selectedMeshes[0]);
 		} else {
-			// Multi Object: Create Proxy
 			this.selectionProxy = new BABYLON.TransformNode('selectionProxy', this.scene);
 			
-			// Calculate Center
 			let min = new BABYLON.Vector3(Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE);
 			let max = new BABYLON.Vector3(-Number.MAX_VALUE, -Number.MAX_VALUE, -Number.MAX_VALUE);
 			
@@ -612,9 +644,7 @@ export class ObjectManager {
 			const center = min.add(max).scale(0.5);
 			this.selectionProxy.position = center;
 			
-			// Parent meshes to proxy (maintains world position)
 			this.selectedMeshes.forEach(m => m.setParent(this.selectionProxy));
-			
 			this.gizmoManager.attachToMesh(this.selectionProxy);
 		}
 	}
@@ -632,30 +662,25 @@ export class ObjectManager {
 			this.scene.lights.find(l => l.metadata && l.metadata.id === id);
 	}
 	
-	// --- Transformation  ---
-	
 	updateObjectProperty (id, prop, value) {
 		const mesh = this.findMeshById(id);
 		if (!mesh) return;
 		
 		const objData = this.placedObjects.find(o => o.id === id);
 		
-		// Handle Locking
 		if (prop === 'isLocked') {
 			objData.isLocked = value;
-			// Refresh gizmo attachment logic
 			this.updateSelectionProxy();
+			if (this.onListChange) this.onListChange(); // Lock icon update
 			return;
 		}
 		
-		// Handle Color Tint
 		if (prop === 'color') {
 			objData.color = value;
 			this.applyColorToMesh(mesh, value);
 			return;
 		}
 		
-		// Capture state for undo
 		const oldData = {
 			position: mesh.absolutePosition.asArray(),
 			rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),
@@ -665,20 +690,14 @@ export class ObjectManager {
 		if (prop === 'name') {
 			mesh.name = value;
 			objData.name = value;
+			if (this.onListChange) this.onListChange();
 			return;
 		}
-		
-		// If we are modifying transform properties manually via UI,
-		// we should temporarily detach from proxy to set absolute values easily,
-		// or calculate local values.
-		// Simplest: If mesh has parent (proxy), detach, update, re-attach?
-		// Or just use setAbsolutePosition.
 		
 		if (prop === 'position') {
 			mesh.setAbsolutePosition(new BABYLON.Vector3(value.x, value.y, value.z));
 			objData.position = [value.x, value.y, value.z];
 		} else if (prop === 'rotation') {
-			// Convert degrees to radians
 			const rads = new BABYLON.Vector3(
 				BABYLON.Tools.ToRadians(value.x),
 				BABYLON.Tools.ToRadians(value.y),
@@ -687,10 +706,6 @@ export class ObjectManager {
 			mesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(rads);
 			objData.rotation = rads.asArray();
 		} else if (prop === 'scaling') {
-			// Scaling is tricky with parents.
-			// For UI input, we usually mean local scaling if single object,
-			// or absolute scaling?
-			// Let's assume local scaling for single object edit.
 			mesh.scaling = new BABYLON.Vector3(value.x, value.y, value.z);
 			objData.scaling = [value.x, value.y, value.z];
 		}
@@ -718,8 +733,8 @@ export class ObjectManager {
 				if (objData) objData.isLocked = value;
 			});
 			this.updateSelectionProxy();
+			if (this.onListChange) this.onListChange();
 		} else if (prop === 'color') {
-			// Apply color to all selected objects
 			this.selectedMeshes.forEach(mesh => {
 				const objData = this.placedObjects.find(o => o.id === mesh.metadata.id);
 				if (objData) {
@@ -727,16 +742,12 @@ export class ObjectManager {
 					this.applyColorToMesh(mesh, value);
 				}
 			});
-			// Note: Color undo/redo is not fully implemented in this snippet for brevity,
-			// but this enables the functionality requested.
 		}
 	}
 	
-	// New method to handle transform updates for multiple objects via UI
 	updateGroupTransform (prop, values) {
 		if (!this.selectionProxy || this.selectedMeshes.length === 0) return;
 		
-		// 1. Capture Old State for Undo
 		const changes = [];
 		this.selectedMeshes.forEach(mesh => {
 			changes.push({
@@ -746,11 +757,10 @@ export class ObjectManager {
 					rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),
 					scaling: mesh.absoluteScaling.asArray()
 				},
-				newData: null // Filled later
+				newData: null
 			});
 		});
 		
-		// 2. Apply Transform to Proxy
 		if (prop === 'position') {
 			this.selectionProxy.position = new BABYLON.Vector3(values.x, values.y, values.z);
 		} else if (prop === 'rotation') {
@@ -764,11 +774,9 @@ export class ObjectManager {
 			this.selectionProxy.scaling = new BABYLON.Vector3(values.x, values.y, values.z);
 		}
 		
-		// 3. Force World Matrix Update to get new absolute positions of children
 		this.selectionProxy.computeWorldMatrix(true);
 		this.selectedMeshes.forEach(m => m.computeWorldMatrix(true));
 		
-		// 4. Update Internal Data & Undo Data
 		changes.forEach(change => {
 			const mesh = this.findMeshById(change.id);
 			const objData = this.placedObjects.find(o => o.id === change.id);
@@ -788,7 +796,6 @@ export class ObjectManager {
 			}
 		});
 		
-		// 5. Push Undo
 		const actualChanges = changes.filter(c =>
 			JSON.stringify(c.oldData) !== JSON.stringify(c.newData)
 		);
@@ -824,7 +831,6 @@ export class ObjectManager {
 	alignSelection (axis, mode) {
 		if (this.selectedMeshes.length < 2) return;
 		
-		// Detach proxy to manipulate individual positions easily
 		if (this.selectionProxy) {
 			this.selectedMeshes.forEach(m => m.setParent(null));
 			this.selectionProxy.dispose();
@@ -912,15 +918,12 @@ export class ObjectManager {
 			}
 		}
 		
-		// Re-establish proxy
 		this.updateSelectionProxy();
 	}
 	
-	// --- Updated Method: Snap Selection Side-by-Side (Respects Locked Objects) ---
 	snapSelection (axis) {
 		if (this.selectedMeshes.length < 2) return;
 		
-		// 1. Detach Proxy to handle individual transforms
 		if (this.selectionProxy) {
 			this.selectedMeshes.forEach(m => m.setParent(null));
 			this.selectionProxy.dispose();
@@ -928,7 +931,6 @@ export class ObjectManager {
 			this.gizmoManager.attachToMesh(null);
 		}
 		
-		// 2. Capture State for Undo
 		const changes = [];
 		this.selectedMeshes.forEach(mesh => {
 			changes.push({
@@ -938,11 +940,10 @@ export class ObjectManager {
 					rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),
 					scaling: mesh.absoluteScaling.asArray()
 				},
-				newData: null // Filled later
+				newData: null
 			});
 		});
 		
-		// 3. Prepare data with bounds and locked status
 		const meshesWithBounds = this.selectedMeshes.map(mesh => {
 			mesh.computeWorldMatrix(true);
 			const objData = this.placedObjects.find(o => o.id === mesh.metadata.id);
@@ -953,16 +954,13 @@ export class ObjectManager {
 			};
 		});
 		
-		// 4. Sort Meshes along axis
 		meshesWithBounds.sort((a, b) => {
 			return a.bounds.min[axis] - b.bounds.min[axis];
 		});
 		
-		// 5. Apply Spacing Logic
 		const lockedIndices = meshesWithBounds.map((m, i) => m.data.isLocked ? i : -1).filter(i => i !== -1);
 		
 		if (lockedIndices.length === 0) {
-			// Standard Behavior: No locked objects, snap everything left-to-right starting from first
 			let currentEdge = meshesWithBounds[0].bounds.max[axis];
 			
 			for (let i = 1; i < meshesWithBounds.length; i++) {
@@ -978,16 +976,8 @@ export class ObjectManager {
 				mesh.computeWorldMatrix(true);
 			}
 		} else {
-			// Locked Behavior: Use locked objects as anchors
-			// We use the first locked object found in the sorted list as the primary pivot.
-			// Objects before it snap backwards (right-to-left).
-			// Objects after it snap forwards (left-to-right).
-			// If subsequent locked objects are encountered, they reset the snapping edge.
-			
 			const pivotIndex = lockedIndices[0];
 			
-			// A. Process Backwards (from pivotIndex - 1 down to 0)
-			// The edge starts at the min of the pivot
 			let backEdge = meshesWithBounds[pivotIndex].bounds.min[axis];
 			
 			for (let i = pivotIndex - 1; i >= 0; i--) {
@@ -995,24 +985,18 @@ export class ObjectManager {
 				const mesh = item.mesh;
 				
 				if (item.data.isLocked) {
-					// If we hit another locked object going backwards, it stays put.
-					// Reset the edge to this object's min for any further preceding objects.
 					backEdge = item.bounds.min[axis];
 				} else {
-					// Move object so its MAX touches backEdge
 					const dim = item.bounds.max[axis] - item.bounds.min[axis];
 					const currentMax = item.bounds.max[axis];
 					const shift = backEdge - currentMax;
 					
 					mesh.position[axis] += shift;
-					// New backEdge is the min of this moved object
 					backEdge -= dim;
 					mesh.computeWorldMatrix(true);
 				}
 			}
 			
-			// B. Process Forwards (from pivotIndex + 1 to end)
-			// The edge starts at the max of the pivot
 			let fwdEdge = meshesWithBounds[pivotIndex].bounds.max[axis];
 			
 			for (let i = pivotIndex + 1; i < meshesWithBounds.length; i++) {
@@ -1020,11 +1004,8 @@ export class ObjectManager {
 				const mesh = item.mesh;
 				
 				if (item.data.isLocked) {
-					// If we hit another locked object going forward, it stays put.
-					// Reset the edge to this object's max for subsequent objects.
 					fwdEdge = item.bounds.max[axis];
 				} else {
-					// Move object so its MIN touches fwdEdge
 					const dim = item.bounds.max[axis] - item.bounds.min[axis];
 					const currentMin = item.bounds.min[axis];
 					const shift = fwdEdge - currentMin;
@@ -1036,7 +1017,6 @@ export class ObjectManager {
 			}
 		}
 		
-		// 6. Update Undo Data & Internal State
 		changes.forEach(change => {
 			const mesh = this.findMeshById(change.id);
 			const objData = this.placedObjects.find(o => o.id === change.id);
@@ -1049,13 +1029,11 @@ export class ObjectManager {
 			
 			change.newData = newData;
 			
-			// Update internal model
 			if (objData) {
 				objData.position = newData.position;
 			}
 		});
 		
-		// Filter out no-ops
 		const actualChanges = changes.filter(c =>
 			JSON.stringify(c.oldData) !== JSON.stringify(c.newData)
 		);
@@ -1066,21 +1044,18 @@ export class ObjectManager {
 				data: actualChanges
 			});
 			
-			// Update UI if needed
 			if (this.onSelectionChange) {
 				const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
 				this.onSelectionChange(selectedData);
 			}
 		}
 		
-		// 7. Re-attach Proxy
 		this.updateSelectionProxy();
 	}
 	
 	updateObjectTransform (id, data) {
-		// When undoing, we might need to detach proxy to set absolute values correctly
 		if (this.selectionProxy) {
-			this.selectObject(null, false); // Clear selection to remove proxy
+			this.selectObject(null, false);
 		}
 		
 		const mesh = this.findMeshById(id);
@@ -1106,7 +1081,8 @@ export class ObjectManager {
 		return {
 			name: mapName,
 			version: 2,
-			assets: this.placedObjects
+			assets: this.placedObjects,
+			groups: this.groups
 		};
 	}
 	
@@ -1119,6 +1095,7 @@ export class ObjectManager {
 		});
 		
 		this.placedObjects = [];
+		this.groups = data.groups || [];
 		this.selectedMeshes = [];
 		this.undoRedo.history = [];
 		this.undoRedo.historyIndex = -1;
@@ -1126,13 +1103,16 @@ export class ObjectManager {
 		
 		this.selectObject(null, false);
 		
+		// Initial clear update
+		if (this.onListChange) this.onListChange();
+		
 		if (data.assets) {
 			data.assets.forEach(item => this.restoreObject(item));
 		}
 	}
 	
 	clearScene () {
-		this.loadMapData({ assets: [] });
+		this.loadMapData({ assets: [], groups: [] });
 	}
 	
 	saveToAutoSave () {

@@ -1,4 +1,5 @@
 import { PropertyPanel } from './property-panel';
+import { TreeView } from './tree-view'; // Import TreeView
 import { loadAssets } from './loader';
 
 export class BuilderUI {
@@ -29,6 +30,7 @@ export class BuilderUI {
 		// Ensure manager exists before creating panel
 		if (this.manager) {
 			this.propertyPanel = new PropertyPanel(this.manager);
+			this.treeView = new TreeView(this.manager); // Initialize TreeView
 		} else {
 			console.error('BuilderUI: ObjectManager is null during initialization.');
 		}
