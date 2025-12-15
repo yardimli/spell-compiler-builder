@@ -49,9 +49,20 @@ module.exports = {
 		})
 	],
 	devServer: {
-		static: {
-			directory: path.join(__dirname, 'dist'),
-		},
+		static: [
+			{
+				directory: path.join(__dirname, 'dist'),
+			},
+			{
+				directory: path.join(__dirname, 'assets'),
+				publicPath: '/assets',
+				// FIX: Explicitly ignore cache folder for this static directory
+				// This prevents the page reload when a thumbnail is saved
+				watch: {
+					ignored: /assets[\\/]cache/
+				}
+			}
+		],
 		compress: true,
 		port: 8081,
 		hot: true,

@@ -7,6 +7,7 @@
 - update thumbnails generation to save thumbnails in cache folder under a subfolder with the name of the asset object folder
 - when selected show the load assets button that will load the assets from the selected folder only and generate thumbnails for them if they dont exist
 
+- BUG: when aligning objects with the buttons the scene updates but when i save and load the scene the object positions are not updated properly
 - on the scene objects remember collapsed state between sessions using local storage
 - on the scene remember last selected assets and reselect them on load
 
@@ -18,6 +19,7 @@
 - add property panel for lights to adjust direction for DirectionalLight and HemisphericLight
 - show different simple 3d representations for each light type
 - a new scene should have a default light (HemisphericLight)
+- add camera to the scene, allow user to drag, rotate and zoom the camera, allow user to view scene from camera perspective or default perspective
 
 - allow enabling disabling skybox (implement in global settings modal)
 var createScene = function () {
