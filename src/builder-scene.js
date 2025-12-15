@@ -45,7 +45,7 @@ export class BuilderScene {
 		// 3. Camera
 		this.camera = new BABYLON.ArcRotateCamera('EditorCamera', -Math.PI / 2, Math.PI / 3, 20, BABYLON.Vector3.Zero(), this.scene);
 		this.camera.wheelPrecision = 50;
-		this.camera.lowerRadiusLimit = 0.1;
+		this.camera.lowerRadiusLimit = 2;
 		this.camera.upperRadiusLimit = 200;
 		
 		// --- Camera Input Configuration ---
@@ -451,8 +451,18 @@ export class BuilderScene {
 				this.camera.inertialBetaOffset -= dy / sensitivity;
 			} else if (this.isCtrlDown) {
 				// Pan (Ctrl + Move)
-				this.camera.inertialPanningX -= dx / sensitivity;
-				this.camera.inertialPanningY += dy / sensitivity;
+				if (evt.shiftKey) {
+					// 3rd Axis Panning (Forward/Backward)
+					// Move target along the camera's local Z axis
+					const forward = this.camera.getDirection(BABYLON.Axis.Z);
+					// Multiplier to match feel of inertial panning (direct pos update vs inertia)
+					const zSensitivity = 25;
+					const dist = (-dy / sensitivity) * zSensitivity;
+					this.camera.target.addInPlace(forward.scale(dist));
+				} else {
+					this.camera.inertialPanningX -= dx / sensitivity;
+					this.camera.inertialPanningY += dy / sensitivity;
+				}
 			}
 			return;
 		}
