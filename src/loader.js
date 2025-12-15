@@ -1,22 +1,44 @@
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
 
-const ASSET_FOLDER = './assets/nature/';
+// Base folder for all object categories
+const OBJECTS_ROOT = './assets/objects/';
 const TIMEOUT_MS = 10000;
 
-// Modified to accept scene and camera from the main application
-export async function loadAssets (scene, camera) {
+// Webpack require.context to scan all subfolders in assets/objects
+// arguments: directory, useSubdirectories, regExp
+const glbContext = require.context('../assets/objects', true, /\.glb$/);
+const cacheContext = require.context('../assets/cache', true, /\.png$/);
+
+/**
+ * Returns a list of available folder names within assets/objects
+ */
+export function getAvailableFolders () {
+	const folders = new Set();
+	glbContext.keys().forEach(key => {
+		// key format is usually "./folderName/fileName.glb"
+		const parts = key.split('/');
+		if (parts.length >= 3) {
+			// parts[0] is '.', parts[1] is the folder name
+			folders.add(parts[1]);
+		}
+	});
+	return Array.from(folders).sort();
+}
+
+// Modified to accept scene, camera, and the specific folder to load
+export async function loadAssets (scene, camera, folderName) {
 	const engine = scene.getEngine();
 	
-	// 1. Scan GLB files
-	const assetContext = require.context('../assets/nature', false, /\.glb$/);
-	const glbFiles = assetContext.keys().map(key => key.replace('./', ''));
+	// 1. Filter GLB files for the selected folder
+	const glbFiles = glbContext.keys()
+		.filter(key => key.startsWith(`./${folderName}/`))
+		.map(key => key.replace('./', '')); // Remove leading ./ to get "folder/file.glb"
 	
 	// 2. Scan existing PNG cache (Webpack Build-time knowledge)
-	const cacheContext = require.context('../assets/cache', false, /\.png$/);
 	const cachedThumbnails = {};
 	cacheContext.keys().forEach(key => {
-		const filename = key.replace('./', '');
+		const filename = key.replace('./', ''); // "folder/file.png"
 		const glbName = filename.replace('.png', '.glb');
 		cachedThumbnails[glbName] = cacheContext(key);
 	});
@@ -28,7 +50,7 @@ export async function loadAssets (scene, camera) {
 	glbFiles.forEach(file => {
 		if (cachedThumbnails[file]) {
 			finalAssets.push({
-				file: file,
+				file: file, // This now includes the folder path e.g. "nature/rock.glb"
 				src: cachedThumbnails[file],
 				generated: false
 			});
@@ -66,7 +88,7 @@ export async function loadAssets (scene, camera) {
 	
 	// 5. Generate Missing using the provided scene and camera
 	if (actuallyMissing.length > 0) {
-		console.log(`[Loader] Generating ${actuallyMissing.length} missing thumbnails...`);
+		console.log(`[Loader] Generating ${actuallyMissing.length} missing thumbnails for ${folderName}...`);
 		const generated = await generateThumbnails(scene, camera, actuallyMissing);
 		finalAssets.push(...generated);
 	}
@@ -82,9 +104,6 @@ async function generateThumbnails (scene, camera, files) {
 	const engine = scene.getEngine();
 	const results = [];
 	
-	// Ensure the engine is rendering to capture screenshots
-	// We don't need a separate render loop here because the main loop in builder-scene is running.
-	
 	for (const file of files) {
 		console.log(`[Loader] Processing: ${file}...`);
 		
@@ -95,6 +114,7 @@ async function generateThumbnails (scene, camera, files) {
 			]);
 			
 			// --- UPLOAD TO SERVER ---
+			// file contains folder path e.g. "nature/rock.glb" -> save as "nature/rock.png"
 			await uploadThumbnail(dataUrl, file.replace('.glb', '.png'));
 			
 			results.push({
@@ -125,7 +145,10 @@ function processSingleFile (scene, camera, engine, file) {
 		let root = null;
 		try {
 			// Import into the main scene
-			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_FOLDER, file, scene);
+			// OBJECTS_ROOT is "./assets/objects/"
+			// file is "folder/filename.glb"
+			// ImportMeshAsync handles this concatenation correctly
+			const result = await BABYLON.SceneLoader.ImportMeshAsync('', OBJECTS_ROOT, file, scene);
 			root = result.meshes[0];
 			
 			// Stop any animations that might have auto-played

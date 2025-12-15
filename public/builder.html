@@ -47,11 +47,17 @@
 				<span>Map Builder Assets</span>
 				<span id="sidebar-toggle-icon">▼</span>
 			</div>
+			<!-- Folder Selection Dropdown -->
+			<div style="padding: 5px 10px; background: #233342; border-bottom: 1px solid #1a252f;">
+				<select id="asset-folder-select" style="width: 100%; padding: 4px; background: #34495e; color: white; border: 1px solid #46607a; border-radius: 3px;">
+					<option value="" disabled selected>Select Folder...</option>
+				</select>
+			</div>
 			
 			<div id="asset-list">
 				<div id="asset-load-area">
-					<p style="color: #bdc3c7; font-size: 13px; margin-bottom: 15px;">Assets not loaded.</p>
-					<button id="btnLoadAssets" class="info">Load Assets</button>
+					<p style="color: #bdc3c7; font-size: 13px; margin-bottom: 15px;">Select a folder to load.</p>
+					<button id="btnLoadAssets" class="info" disabled>Load Assets</button>
 				</div>
 			</div>
 		</div>

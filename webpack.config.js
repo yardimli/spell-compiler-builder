@@ -26,12 +26,12 @@ module.exports = {
 			{
 				test: /\.glb$/,
 				type: 'asset/resource',
-				generator: { filename: 'assets/nature/[name][ext]' }
+				generator: { filename: 'assets/objects/[path][name][ext]' } // Preserves folder structure
 			},
 			{
 				test: /\.png$/,
 				type: 'asset/resource',
-				generator: { filename: 'assets/cache/[name][ext]' }
+				generator: { filename: 'assets/cache/[path][name][ext]' } // Preserves folder structure
 			}
 		]
 	},
@@ -87,6 +87,12 @@ module.exports = {
 				
 				// Define path (Ensure ./assets/cache exists)
 				const filePath = path.join(__dirname, 'assets/cache', filename);
+				
+				// Ensure directory exists (Recursive for subfolders)
+				const dir = path.dirname(filePath);
+				if (!fs.existsSync(dir)){
+					fs.mkdirSync(dir, { recursive: true });
+				}
 				
 				// Write file
 				fs.writeFile(filePath, base64Data, 'base64', (err) => {

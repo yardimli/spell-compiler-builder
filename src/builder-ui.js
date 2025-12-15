@@ -1,6 +1,6 @@
 import { PropertyPanel } from './property-panel';
 import { TreeView } from './tree-view'; // Import TreeView
-import { loadAssets } from './loader';
+import { loadAssets, getAvailableFolders } from './loader';
 
 export class BuilderUI {
 	constructor (builderScene) {
@@ -11,6 +11,7 @@ export class BuilderUI {
 		// LocalStorage Keys
 		this.LS_SETTINGS_KEY = 'builder_global_settings';
 		this.LS_SIDEBAR_KEY = 'builder_sidebar_state';
+		this.LS_LAST_FOLDER_KEY = 'builder_last_folder';
 		// Controls key removed as controls are now in top bar
 		
 		// Default Global Settings
@@ -45,12 +46,8 @@ export class BuilderUI {
 			this.manager.loadFromAutoSave();
 		}
 		
-		// If assets are provided (e.g. preloaded), build sidebar, otherwise show load button
-		if (assets && assets.length > 0) {
-			this.buildSidebar(assets);
-		} else {
-			this.setupLoadButton();
-		}
+		// Setup Sidebar Dropdown and Load Button
+		this.setupAssetBrowser();
 		
 		this.setupControls();
 		this.setupLeftSidebarToggle();
@@ -61,41 +58,86 @@ export class BuilderUI {
 		this.setupAutoSaveTimer(); // Initialize timer
 	}
 	
-	setupLoadButton () {
+	setupAssetBrowser () {
+		const folderSelect = document.getElementById('asset-folder-select');
 		const btnLoad = document.getElementById('btnLoadAssets');
 		const loadArea = document.getElementById('asset-load-area');
+		const listContainer = document.getElementById('asset-list');
 		const overlay = document.getElementById('loading-overlay');
 		
-		if (btnLoad) {
-			btnLoad.onclick = async () => {
-				// 1. Lock UI and Camera
-				overlay.style.display = 'flex';
-				this.scene.setCameraLocked(true);
-				
-				// 2. Prepare Scene (Hide grid, hide existing objects)
-				this.scene.prepareForThumbnailGeneration();
-				
-				try {
-					// 3. Load Assets (Pass scene and camera for thumbnail generation)
-					const assets = await loadAssets(this.scene.scene, this.scene.camera);
-					
-					// 4. Restore Scene
-					this.scene.restoreAfterThumbnailGeneration();
-					
-					// 5. Update UI
-					loadArea.style.display = 'none';
-					this.buildSidebar(assets);
-				} catch (e) {
-					console.error('Failed to load assets:', e);
-					alert('Error loading assets. Check console.');
-					this.scene.restoreAfterThumbnailGeneration();
-				} finally {
-					// 6. Unlock
-					this.scene.setCameraLocked(false);
-					overlay.style.display = 'none';
-				}
-			};
+		// 1. Populate Dropdown
+		const folders = getAvailableFolders();
+		if (folders.length === 0) {
+			const opt = document.createElement('option');
+			opt.text = "No folders found";
+			folderSelect.add(opt);
+			folderSelect.disabled = true;
+		} else {
+			folders.forEach(folder => {
+				const opt = document.createElement('option');
+				opt.value = folder;
+				opt.text = folder.charAt(0).toUpperCase() + folder.slice(1);
+				folderSelect.add(opt);
+			});
+			
+			// Restore last selected folder
+			const lastFolder = localStorage.getItem(this.LS_LAST_FOLDER_KEY);
+			if (lastFolder && folders.includes(lastFolder)) {
+				folderSelect.value = lastFolder;
+				btnLoad.disabled = false;
+				btnLoad.innerText = `Load ${lastFolder}`;
+			}
 		}
+		
+		// 2. Handle Dropdown Change
+		folderSelect.onchange = () => {
+			const selectedFolder = folderSelect.value;
+			if (selectedFolder) {
+				localStorage.setItem(this.LS_LAST_FOLDER_KEY, selectedFolder);
+				
+				// Reset View
+				// Remove existing asset items but keep the load area
+				const items = listContainer.querySelectorAll('.category-header, .category-grid');
+				items.forEach(el => el.remove());
+				
+				loadArea.style.display = 'flex';
+				btnLoad.disabled = false;
+				btnLoad.innerText = `Load ${selectedFolder}`;
+			}
+		};
+		
+		// 3. Handle Load Button Click
+		btnLoad.onclick = async () => {
+			const selectedFolder = folderSelect.value;
+			if (!selectedFolder) return;
+			
+			// Lock UI and Camera
+			overlay.style.display = 'flex';
+			this.scene.setCameraLocked(true);
+			
+			// Prepare Scene (Hide grid, hide existing objects)
+			this.scene.prepareForThumbnailGeneration();
+			
+			try {
+				// Load Assets for specific folder
+				const assets = await loadAssets(this.scene.scene, this.scene.camera, selectedFolder);
+				
+				// Restore Scene
+				this.scene.restoreAfterThumbnailGeneration();
+				
+				// Update UI
+				loadArea.style.display = 'none';
+				this.buildSidebar(assets, selectedFolder);
+			} catch (e) {
+				console.error('Failed to load assets:', e);
+				alert('Error loading assets. Check console.');
+				this.scene.restoreAfterThumbnailGeneration();
+			} finally {
+				// Unlock
+				this.scene.setCameraLocked(false);
+				overlay.style.display = 'none';
+			}
+		};
 	}
 	
 	// --- Auto Save Logic ---
@@ -187,94 +229,59 @@ export class BuilderUI {
 	}
 	
 	// --- Sidebar Logic ---
-	buildSidebar (assets) {
+	buildSidebar (assets, categoryName) {
 		const listContainer = document.getElementById('asset-list');
-		// Clear previous content (including the load button area)
-		listContainer.innerHTML = '';
+		// Note: We don't clear listContainer completely because we want to keep the load area hidden but present
+		// Remove previously added headers/grids
+		const existingItems = listContainer.querySelectorAll('.category-header, .category-grid');
+		existingItems.forEach(el => el.remove());
 		
-		// Load collapsed state
-		let sidebarState = {};
-		try {
-			sidebarState = JSON.parse(localStorage.getItem(this.LS_SIDEBAR_KEY)) || {};
-		} catch (e) {}
+		// Create Header
+		const header = document.createElement('div');
+		header.className = 'category-header';
+		header.innerText = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
 		
-		// 1. Group assets by category (prefix before first underscore)
-		const categories = {};
+		// Create Grid Container
+		const grid = document.createElement('div');
+		grid.className = 'category-grid';
 		
+		// Toggle functionality
+		header.addEventListener('click', () => {
+			header.classList.toggle('collapsed');
+			grid.classList.toggle('hidden');
+		});
+		
+		// Add Assets to Grid
 		assets.forEach(asset => {
-			// Extract category: "nature_rock.glb" -> "nature"
-			const parts = asset.file.split('_');
-			const category = parts.length > 1 ? parts[0] : 'misc';
+			const div = document.createElement('div');
+			div.className = 'asset-item';
+			div.dataset.file = asset.file; // Store filename (includes folder) for context menu
 			
-			if (!categories[category]) {
-				categories[category] = [];
-			}
-			categories[category].push(asset);
+			const img = document.createElement('img');
+			img.className = 'asset-thumb';
+			img.src = asset.src;
+			
+			// Clean label: remove extension and folder prefix
+			// asset.file is "folder/filename.glb"
+			let cleanName = asset.file.split('/').pop().replace(/\.glb$/i, '');
+			cleanName = cleanName.replace(/_/g, ' ');
+			
+			const span = document.createElement('span');
+			span.className = 'asset-name';
+			span.innerText = cleanName;
+			
+			div.appendChild(img);
+			div.appendChild(span);
+			
+			div.addEventListener('click', () => {
+				this.manager.addAsset(asset.file, this.scene.selectedCellPosition);
+			});
+			
+			grid.appendChild(div);
 		});
 		
-		// 2. Create UI for each category
-		Object.keys(categories).sort().forEach(categoryName => {
-			// Create Header
-			const header = document.createElement('div');
-			header.className = 'category-header';
-			header.innerText = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
-			
-			// Create Grid Container
-			const grid = document.createElement('div');
-			grid.className = 'category-grid';
-			
-			// Check state (Default to Collapsed if not found in LS, or if LS says so)
-			const isCollapsed = sidebarState[categoryName] !== undefined ? sidebarState[categoryName] : true;
-			
-			if (isCollapsed) {
-				header.classList.add('collapsed');
-				grid.classList.add('hidden');
-			}
-			
-			// Toggle functionality
-			header.addEventListener('click', () => {
-				const collapsed = header.classList.toggle('collapsed');
-				grid.classList.toggle('hidden');
-				
-				// Save state
-				sidebarState[categoryName] = collapsed;
-				localStorage.setItem(this.LS_SIDEBAR_KEY, JSON.stringify(sidebarState));
-			});
-			
-			// Add Assets to Grid
-			categories[categoryName].forEach(asset => {
-				const div = document.createElement('div');
-				div.className = 'asset-item';
-				div.dataset.file = asset.file; // Store filename for context menu
-				
-				const img = document.createElement('img');
-				img.className = 'asset-thumb';
-				img.src = asset.src;
-				
-				// Clean label: remove extension and category prefix
-				let cleanName = asset.file.replace(/\.glb$/i, '');
-				if (categoryName !== 'misc' && cleanName.startsWith(categoryName + '_')) {
-					cleanName = cleanName.substring(categoryName.length + 1);
-				}
-				cleanName = cleanName.replace(/_/g, ' ');
-				
-				const span = document.createElement('span');
-				span.className = 'asset-name';
-				span.innerText = cleanName;
-				
-				div.appendChild(img);
-				div.appendChild(span);
-				
-				div.addEventListener('click', () => {
-					this.manager.addAsset(asset.file, this.scene.selectedCellPosition);
-				});
-				
-				grid.appendChild(div);
-			});
-			
-			listContainer.appendChild(header);
-			listContainer.appendChild(grid);
-		});
+		listContainer.appendChild(header);
+		listContainer.appendChild(grid);
 	}
 	
 	setupLeftSidebarToggle () {

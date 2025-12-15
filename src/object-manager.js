@@ -6,7 +6,8 @@ import { AlignmentManager } from './managers/alignment-manager';
 import { PropertyManager } from './managers/property-manager';
 import { OperationManager } from './managers/operation-manager';
 
-const ASSET_FOLDER = './assets/nature/';
+// Updated root path for assets
+const ASSET_ROOT = './assets/objects/';
 const LS_AUTOSAVE_KEY = 'builder_autosave_map';
 
 export class ObjectManager {
@@ -73,6 +74,7 @@ export class ObjectManager {
 	
 	// --- Asset Spawning (Core Responsibility) ---
 	
+	// filename now includes folder path e.g. "nature/rock.glb"
 	async addAsset (filename, position) {
 		try {
 			let targetX = position.x;
@@ -88,7 +90,8 @@ export class ObjectManager {
 			}
 			
 			const id = BABYLON.Tools.RandomId();
-			const baseName = filename.replace(/\.glb$/i, '');
+			// Extract base name from full path "nature/rock.glb" -> "rock"
+			const baseName = filename.split('/').pop().replace(/\.glb$/i, '');
 			const existing = this.placedObjects.filter(o => o.name && o.name.startsWith(baseName));
 			
 			let maxIndex = 0;
@@ -102,7 +105,8 @@ export class ObjectManager {
 			
 			const uniqueName = `${baseName}_${maxIndex + 1}`;
 			
-			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_FOLDER, filename, this.scene);
+			// Use ASSET_ROOT + filename (which includes subfolder)
+			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, filename, this.scene);
 			const root = result.meshes[0];
 			
 			root.name = uniqueName;
@@ -130,7 +134,7 @@ export class ObjectManager {
 			const objData = {
 				id: id,
 				name: uniqueName,
-				file: filename,
+				file: filename, // Stores "folder/file.glb"
 				type: 'mesh',
 				isLocked: false,
 				color: '#ffffff',
@@ -151,7 +155,7 @@ export class ObjectManager {
 	
 	async addAssetGrid (filename, position, rows, cols) {
 		try {
-			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_FOLDER, filename, this.scene);
+			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, filename, this.scene);
 			const root = result.meshes[0];
 			
 			const bounds = root.getHierarchyBoundingVectors();
@@ -160,7 +164,7 @@ export class ObjectManager {
 			const heightOffset = -bounds.min.y;
 			
 			const addedObjectsData = [];
-			const baseName = filename.replace(/\.glb$/i, '');
+			const baseName = filename.split('/').pop().replace(/\.glb$/i, '');
 			
 			const startX = position.x - (width * cols) / 2 + width / 2;
 			const startZ = position.z - (depth * rows) / 2 + depth / 2;
@@ -288,7 +292,10 @@ export class ObjectManager {
 			this.placedObjects.push(data);
 			if (this.onListChange) this.onListChange(); // Trigger update for sync items
 		} else {
-			BABYLON.SceneLoader.ImportMeshAsync('', ASSET_FOLDER, data.file, this.scene).then(res => {
+			// Handle legacy files (no slash) vs new files (with folder slash)
+			// If data.file is just "rock.glb", we might need to assume a default folder or search
+			// But for now, assume data.file is correct relative to ASSET_ROOT
+			BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, data.file, this.scene).then(res => {
 				const root = res.meshes[0];
 				root.name = data.name;
 				root.position = BABYLON.Vector3.FromArray(data.position);
