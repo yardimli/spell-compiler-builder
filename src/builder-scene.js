@@ -336,6 +336,37 @@ export class BuilderScene {
 		const isMultiSelect = info.event.shiftKey;
 		
 		if (pick.hit) {
+			// NEW: Check if we are in "Placement Mode" (an asset is selected in sidebar)
+			if (this.objectManager.activeAssetFile) {
+				let targetPosition = pick.pickedPoint.clone();
+				
+				// If we clicked on an existing object, we want to stack on top
+				if (pick.pickedMesh !== this.groundMesh) {
+					// Find the root object of what we clicked
+					let mesh = pick.pickedMesh;
+					while (mesh && (!mesh.metadata || !mesh.metadata.isObject) && mesh.parent) {
+						mesh = mesh.parent;
+					}
+					
+					// If it's a valid object, calculate top center for stacking
+					if (mesh) {
+						// Ensure world matrix is up to date
+						mesh.computeWorldMatrix(true);
+						mesh.getChildMeshes().forEach(m => m.computeWorldMatrix(true));
+						
+						const bounds = mesh.getHierarchyBoundingVectors();
+						// Use the X/Z from the pick, but Y from the top of the bounding box
+						targetPosition.y = bounds.max.y;
+					}
+				}
+				
+				// Place the asset
+				this.objectManager.addAsset(this.objectManager.activeAssetFile, targetPosition);
+				
+				// Stop processing (don't select the object underneath)
+				return;
+			}
+			
 			// 1. Handle Grid Click (Deselect)
 			if (pick.pickedMesh === this.groundMesh) {
 				// If clicking grid without shift, deselect all

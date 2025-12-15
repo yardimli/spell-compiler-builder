@@ -199,7 +199,16 @@ body, html {
     padding: 4px;
     border-radius: 4px;
     transition: background 0.2s;
+    box-sizing: border-box;
 }
+
+/* NEW: Selected state for asset item */
+.asset-item.selected {
+    background: #3e5871;
+    border-color: #f1c40f;
+    box-shadow: 0 0 5px rgba(241, 196, 15, 0.5);
+}
+
 .asset-item:hover { background: #3e5871; border-color: #2ecc71; }
 .asset-item:active { background: #27ae60; }
 
@@ -324,11 +333,6 @@ body, html {
 }
 
 #tree-view.collapsed {
-    /* When collapsed, it only takes header height.
-       Note: Since it's flex:1, we might need JS to handle 'collapse'
-       differently if we want the properties panel to stay visible
-       or if we want the whole sidebar to collapse.
-       For now, keeping existing logic: tree-view collapses itself. */
     flex: 0 0 40px;
     height: 40px;
 }

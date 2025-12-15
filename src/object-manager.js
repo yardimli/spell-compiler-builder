@@ -22,6 +22,9 @@ export class ObjectManager {
 		this.selectedMeshes = []; // Array of currently selected Babylon Meshes
 		this.selectionProxy = null; // TransformNode for multi-selection group transforms
 		
+		// NEW: Track the asset selected in the sidebar waiting to be placed
+		this.activeAssetFile = null;
+		
 		// Settings
 		this._gridSize = 2.5;
 		this.defaultYOffset = 0;
@@ -30,6 +33,7 @@ export class ObjectManager {
 		// Events
 		this.onSelectionChange = null; // Callback for UI
 		this.onListChange = null; // Callback for TreeView
+		this.onAssetSelectionChange = null; // NEW: Callback when sidebar asset is selected
 		
 		// Initialize Undo/Redo Manager
 		this.undoRedo = new UndoRedoManager(this);
@@ -73,6 +77,14 @@ export class ObjectManager {
 	deleteSelected () { this.operationManager.deleteSelected(); }
 	duplicateSelection () { this.operationManager.duplicateSelection(); }
 	
+	// --- NEW: Asset Selection Logic ---
+	setActiveAsset (file) {
+		this.activeAssetFile = file;
+		if (this.onAssetSelectionChange) {
+			this.onAssetSelectionChange(file);
+		}
+	}
+	
 	// --- Asset Spawning (Core Responsibility) ---
 	
 	// filename now includes folder path e.g. "nature/rock.glb"
@@ -82,7 +94,9 @@ export class ObjectManager {
 			let targetZ = position.z;
 			let baseY = position.y;
 			
-			if (this.selectedMeshes.length === 1) {
+			// Only use selection-based centering if NOT in active placement mode
+			// OR if the position passed is generic (which shouldn't happen in placement mode)
+			if (!this.activeAssetFile && this.selectedMeshes.length === 1) {
 				const baseMesh = this.selectedMeshes[0];
 				const bounds = baseMesh.getHierarchyBoundingVectors();
 				targetX = (bounds.min.x + bounds.max.x) / 2;
@@ -118,7 +132,7 @@ export class ObjectManager {
 			const bounds = root.getHierarchyBoundingVectors();
 			const heightOffset = -bounds.min.y;
 			
-			if (this.selectedMeshes.length === 1) {
+			if (this.selectedMeshes.length === 1 && !this.activeAssetFile) {
 				root.position = new BABYLON.Vector3(targetX, baseY, targetZ);
 			} else {
 				root.position = new BABYLON.Vector3(targetX, baseY + heightOffset + this.defaultYOffset, targetZ);

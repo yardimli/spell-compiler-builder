@@ -30,6 +30,11 @@ export class BuilderUI {
 		if (this.manager) {
 			this.propertyPanel = new PropertyPanel(this.manager);
 			this.treeView = new TreeView(this.manager);
+			
+			// NEW: Listen for asset selection changes to update UI
+			this.manager.onAssetSelectionChange = (file) => {
+				this.updateSidebarSelection(file);
+			};
 		} else {
 			console.error('BuilderUI: ObjectManager is null during initialization.');
 		}
@@ -220,8 +225,9 @@ export class BuilderUI {
 				div.appendChild(img);
 				div.appendChild(span);
 				
+				// NEW: Click selects the asset for placement instead of placing immediately
 				div.addEventListener('click', () => {
-					this.manager.addAsset(asset.file, this.scene.selectedCellPosition);
+					this.manager.setActiveAsset(asset.file);
 				});
 				
 				grid.appendChild(div);
@@ -232,7 +238,17 @@ export class BuilderUI {
 		});
 	}
 	
-	// ... (Rest of the file remains unchanged: setupAutoSaveTimer, setupControls, etc.)
+	// NEW: Helper to visually update the sidebar selection
+	updateSidebarSelection (selectedFile) {
+		const items = document.querySelectorAll('.asset-item');
+		items.forEach(item => {
+			if (item.dataset.file === selectedFile) {
+				item.classList.add('selected');
+			} else {
+				item.classList.remove('selected');
+			}
+		});
+	}
 	
 	setupAutoSaveTimer () {
 		const btnSaveNow = document.getElementById('btnSaveNow');
@@ -328,6 +344,24 @@ export class BuilderUI {
 				this.currentMapName = 'new_map';
 			}
 		};
+		
+		// NEW: Clear Selection Button Logic
+		document.getElementById('btnClearSelection').onclick = () => {
+			this.clearAllSelections();
+		};
+		
+		// NEW: ESC Key Logic
+		window.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape') {
+				this.clearAllSelections();
+			}
+		});
+	}
+	
+	// NEW: Helper to clear both asset placement selection and scene object selection
+	clearAllSelections () {
+		this.manager.setActiveAsset(null);
+		this.manager.selectObject(null, false);
 	}
 	
 	setupSaveModal () {
