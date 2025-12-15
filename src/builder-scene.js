@@ -11,7 +11,6 @@ export class BuilderScene {
 		this.camera = null;
 		this.shadowGenerator = null;
 		this.groundMesh = null;
-		this.cursorMesh = null;
 		
 		this.objectManager = null;
 		
@@ -80,9 +79,8 @@ export class BuilderScene {
 		// 5. Object Manager (Handles Logic)
 		this.objectManager = new ObjectManager(this.scene, this.shadowGenerator);
 		
-		// 6. Grid & Cursor (Created after settings are loaded in UI, but init here with defaults)
+		// 6. Grid (Created after settings are loaded in UI, but init here with defaults)
 		this.createGrid(this.objectManager.gridSize);
-		this.createCursor();
 		
 		// 7. Interaction
 		this.setupInteraction();
@@ -119,15 +117,13 @@ export class BuilderScene {
 			cameraRadius: this.camera.radius,
 			cameraTarget: this.camera.target.clone(),
 			gridEnabled: this.groundMesh.isEnabled(),
-			cursorEnabled: this.cursorMesh.isEnabled(),
 			clearColor: this.scene.clearColor.clone(),
 			// Disable Gizmos during thumbnail generation
 			gizmosEnabled: this.objectManager.gizmoManager.positionGizmoEnabled
 		};
 		
-		// Hide Grid and Cursor
+		// Hide Grid
 		this.groundMesh.setEnabled(false);
-		this.cursorMesh.setEnabled(false);
 		
 		// Hide Gizmos
 		this.objectManager.gizmoManager.positionGizmoEnabled = false;
@@ -155,7 +151,6 @@ export class BuilderScene {
 		
 		// Restore Visibility
 		this.groundMesh.setEnabled(this.savedState.gridEnabled);
-		this.cursorMesh.setEnabled(this.savedState.cursorEnabled);
 		this.scene.clearColor = this.savedState.clearColor;
 		
 		// Restore Gizmos (Only restore the one that was enabled, or default to position)
@@ -278,31 +273,9 @@ export class BuilderScene {
 		this.createGrid(this.objectManager.gridSize);
 	}
 	
-	createCursor () {
-		const size = this.objectManager.gridSize * 0.95;
-		this.cursorMesh = BABYLON.MeshBuilder.CreateGround('cursor', { width: size, height: size }, this.scene);
-		const mat = new BABYLON.StandardMaterial('cursorMat', this.scene);
-		mat.diffuseColor = new BABYLON.Color3(0, 1, 0);
-		mat.alpha = 0.4;
-		mat.zOffset = -1;
-		this.cursorMesh.material = mat;
-		this.cursorMesh.isPickable = false;
-		this.updateCursorPosition(new BABYLON.Vector3(0, 0, 0));
-	}
-	
 	updateGridSize (size) {
 		this.objectManager.gridSize = size;
 		this.createGrid(size);
-		this.cursorMesh.dispose();
-		this.createCursor();
-	}
-	
-	updateCursorPosition (point) {
-		const gridSize = this.objectManager.gridSize;
-		const x = Math.floor(point.x / gridSize) * gridSize + gridSize / 2;
-		const z = Math.floor(point.z / gridSize) * gridSize + gridSize / 2;
-		this.selectedCellPosition.set(x, 0, z);
-		this.cursorMesh.position.set(x, 0.05, z);
 	}
 	
 	setupKeyboardControls () {
@@ -365,7 +338,6 @@ export class BuilderScene {
 		if (pick.hit) {
 			// 1. Handle Grid Click (Deselect)
 			if (pick.pickedMesh === this.groundMesh) {
-				this.updateCursorPosition(pick.pickedPoint);
 				// If clicking grid without shift, deselect all
 				if (!isMultiSelect) {
 					this.objectManager.selectObject(null, false);
