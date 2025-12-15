@@ -29,6 +29,7 @@ export class ObjectManager {
 		this._gridSize = 2.5;
 		this.defaultYOffset = 0;
 		this.autoSaveEnabled = true;
+		this.cursorIncrement = 0.05; // Default increment for arrow key movement
 		
 		// Events
 		this.onSelectionChange = null; // Callback for UI
@@ -82,6 +83,59 @@ export class ObjectManager {
 		this.activeAssetFile = file;
 		if (this.onAssetSelectionChange) {
 			this.onAssetSelectionChange(file);
+		}
+	}
+	
+	// --- Nudge Logic (Arrow Keys) ---
+	nudgeSelection (x, y, z) {
+		if (this.selectedMeshes.length === 0) return;
+		
+		const changes = [];
+		const offset = new BABYLON.Vector3(x, y, z);
+		
+		this.selectedMeshes.forEach(mesh => {
+			const id = mesh.metadata.id;
+			const objData = this.placedObjects.find(o => o.id === id);
+			if (objData && objData.isLocked) return;
+			
+			const oldData = {
+				position: mesh.absolutePosition.asArray(),
+				rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),
+				scaling: mesh.absoluteScaling.asArray()
+			};
+			
+			mesh.position.addInPlace(offset);
+			mesh.computeWorldMatrix(true);
+			
+			const newData = {
+				position: mesh.absolutePosition.asArray(),
+				rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),
+				scaling: mesh.absoluteScaling.asArray()
+			};
+			
+			if (objData) {
+				objData.position = newData.position;
+			}
+			
+			changes.push({
+				id: id,
+				oldData: oldData,
+				newData: newData
+			});
+		});
+		
+		if (changes.length > 0) {
+			this.undoRedo.add({
+				type: 'TRANSFORM',
+				data: changes
+			});
+			
+			this.updateSelectionProxy();
+			
+			if (this.onSelectionChange) {
+				const selectedData = this.selectedMeshes.map(m => this.placedObjects.find(o => o.id === m.metadata.id));
+				this.onSelectionChange(selectedData);
+			}
 		}
 	}
 	

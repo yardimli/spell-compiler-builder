@@ -356,6 +356,17 @@ export class BuilderUI {
 				this.clearAllSelections();
 			}
 		});
+		
+		// NEW: Cursor Increment Input
+		const inputStep = document.getElementById('inputCursorStep');
+		if (inputStep) {
+			inputStep.onchange = (e) => {
+				const val = parseFloat(e.target.value);
+				if (!isNaN(val) && val > 0) {
+					this.manager.cursorIncrement = val;
+				}
+			};
+		}
 	}
 	
 	// NEW: Helper to clear both asset placement selection and scene object selection

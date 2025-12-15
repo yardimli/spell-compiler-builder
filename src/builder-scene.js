@@ -45,7 +45,7 @@ export class BuilderScene {
 		// 3. Camera
 		this.camera = new BABYLON.ArcRotateCamera('EditorCamera', -Math.PI / 2, Math.PI / 3, 20, BABYLON.Vector3.Zero(), this.scene);
 		this.camera.wheelPrecision = 50;
-		this.camera.lowerRadiusLimit = 2;
+		this.camera.lowerRadiusLimit = 0.1;
 		this.camera.upperRadiusLimit = 200;
 		
 		// --- Camera Input Configuration ---
@@ -286,6 +286,42 @@ export class BuilderScene {
 			} else if (e.key === 'Alt') {
 				this.isAltDown = true;
 				e.preventDefault(); // Prevent browser menu focus
+			}
+			
+			// NEW: Arrow Key Nudge Logic
+			if (this.objectManager.selectedMeshes.length > 0) {
+				// Ignore if user is typing in an input
+				if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+				
+				let dx = 0, dy = 0, dz = 0;
+				const step = this.objectManager.cursorIncrement;
+				let handled = false;
+				
+				switch (e.key) {
+					case 'ArrowLeft':
+						dx = -step;
+						handled = true;
+						break;
+					case 'ArrowRight':
+						dx = step;
+						handled = true;
+						break;
+					case 'ArrowUp':
+						if (e.shiftKey) dy = step;
+						else dz = step;
+						handled = true;
+						break;
+					case 'ArrowDown':
+						if (e.shiftKey) dy = -step;
+						else dz = -step;
+						handled = true;
+						break;
+				}
+				
+				if (handled) {
+					e.preventDefault(); // Stop camera movement / scrolling
+					this.objectManager.nudgeSelection(dx, dy, dz);
+				}
 			}
 		});
 		

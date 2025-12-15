@@ -14,8 +14,9 @@
 - assets with colors when first added to the scene have colors but later when the scene is reloaded the colors are gone and they are all gray
 - in color add reset button that will reset the color to null (default texture color)
 -on the ui put name, object color and the reset button on the same row, the object color should be a square sized
-
 - when adding a new asset, user should select it first from the left sidebar, the selected asset should be highlighted, then when clicking on the canvas it will add the selected asset to the clicked place on the grid. if another asset is already selected it should add it above the existing one as it is now. The selection should remain so subsequent clicks will add more of the same asset until another asset is selected from the sidebar or the selection is cleared (add a clear selection button on the top menubar it should both clear any objects selected on the scene and in the asset sidebar, esc key should do the same)
+- when one or more objects are selected make the arrow keys move the selection on the x,z planes if the user press shift up/down arrow keys should move it on the y plane. on the top menubar add a small numeric input for cursor increment default is 0.05 with increments in 0.05
+- when panning the camera with ctrl if user press ctrl+shift allow panning in the 3rd axis that it is not panning in
 
 #TODO 10
 - make light button open a dropdown with Pointlight, DirectionalLight, HemisphericLight
