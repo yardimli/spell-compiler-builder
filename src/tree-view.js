@@ -55,9 +55,7 @@ export class TreeView {
 			e.preventDefault();
 			this.content.classList.remove('drag-over');
 			
-			// FIX: Don't check e.target === this.content strictly.
-			// Since groups stop propagation, if the event reaches here,
-			// it means it was dropped "outside" any group (i.e., on the root list).
+			// FIXED: Removed strict check (e.target === this.content) to allow drops from groups to root
 			const data = e.dataTransfer.getData('text/plain');
 			if (data) {
 				try {
@@ -82,7 +80,7 @@ export class TreeView {
 		
 		// 2. Render Ungrouped Objects
 		const groupedIds = this.manager.groups.flatMap(g => g.objectIds);
-		// FIX: Safety check for obj existence
+		// FIXED: Safety check for obj existence
 		const ungroupedObjects = this.manager.placedObjects.filter(obj => obj && !groupedIds.includes(obj.id));
 		
 		// Sort alphabetically
@@ -93,7 +91,7 @@ export class TreeView {
 		});
 		
 		// Re-apply highlights based on current selection
-		// FIX: Robust check to prevent crash if selectedMeshes contains disposed items or placedObjects has issues
+		// FIXED: Robust check to prevent crash if selectedMeshes contains disposed items or placedObjects has issues
 		const currentSelection = this.manager.selectedMeshes
 			.map(m => {
 				if (!m || !m.metadata) return null;
@@ -234,6 +232,7 @@ export class TreeView {
 		itemsContainer.className = 'tree-group-items';
 		
 		// Find objects belonging to this group
+		// FIXED: Added null checks inside map and filter
 		const groupObjects = group.objectIds
 			.map(id => this.manager.placedObjects.find(o => o && o.id === id))
 			.filter(Boolean);

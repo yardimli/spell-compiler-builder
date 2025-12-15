@@ -269,7 +269,8 @@ export class ObjectManager {
 			mesh.dispose();
 		}
 		
-		this.placedObjects = this.placedObjects.filter(o => o.id !== id);
+		// FIXED: Added null check 'o &&' to prevent crashes if placedObjects has holes
+		this.placedObjects = this.placedObjects.filter(o => o && o.id !== id);
 	}
 	
 	restoreObject (data) {
