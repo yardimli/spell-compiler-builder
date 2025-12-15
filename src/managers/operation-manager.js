@@ -11,15 +11,20 @@ export class OperationManager {
 		const deletedData = [];
 		const deletedIds = [];
 		
+		// Create a copy of the array to iterate safely
 		const meshesToDelete = [...this.om.selectedMeshes];
 		
 		meshesToDelete.forEach(mesh => {
+			// Safety check for metadata
+			if (!mesh.metadata) return;
+			
 			const id = mesh.metadata.id;
 			const objData = this.om.placedObjects.find(o => o.id === id);
 			
 			if (objData && !objData.isLocked) {
 				deletedData.push(objData);
 				deletedIds.push(id);
+				// We pass false to skip individual selection updates/proxy rebuilds for performance
 				this.om.removeObjectById(id, false);
 			}
 		});
@@ -27,11 +32,29 @@ export class OperationManager {
 		// Delegate group cleanup to GroupManager
 		this.om.groupManager.cleanupDeletedObjects(deletedIds);
 		
+		// CRITICAL FIX: Clean up selectedMeshes to remove disposed objects
+		// If we don't do this, selectedMeshes contains disposed meshes which causes crashes in UI
+		this.om.selectedMeshes = this.om.selectedMeshes.filter(m =>
+			m.metadata && !deletedIds.includes(m.metadata.id)
+		);
+		this.om.updateSelectionProxy();
+		
 		if (deletedData.length > 0) {
 			this.om.undoRedo.add({ type: 'DELETE', data: deletedData });
 		}
 		
-		if (this.om.onSelectionChange) this.om.onSelectionChange(null);
+		// Update UI with remaining selection (if any locked objects remain)
+		if (this.om.onSelectionChange) {
+			if (this.om.selectedMeshes.length > 0) {
+				const selectedData = this.om.selectedMeshes
+					.map(m => this.om.placedObjects.find(o => o.id === m.metadata.id))
+					.filter(Boolean);
+				this.om.onSelectionChange(selectedData);
+			} else {
+				this.om.onSelectionChange(null);
+			}
+		}
+		
 		if (this.om.onListChange) this.om.onListChange();
 	}
 	

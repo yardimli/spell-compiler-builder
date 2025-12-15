@@ -8,8 +8,10 @@ export class TreeView {
 		
 		this.isExpanded = false;
 		this.lastClickedIndex = -1; // For shift-click logic
+		this.collapsedGroups = new Set(); // Track collapsed state of groups
 		
 		this.setupUI();
+		this.setupDragDropRoot(); // Setup drop on root area
 		
 		// Subscribe to manager events
 		if (this.manager) {
@@ -37,6 +39,39 @@ export class TreeView {
 		};
 	}
 	
+	setupDragDropRoot () {
+		// Allow dropping items onto the main content area to ungroup them
+		this.content.addEventListener('dragover', (e) => {
+			e.preventDefault();
+			e.dataTransfer.dropEffect = 'move';
+			this.content.classList.add('drag-over');
+		});
+		
+		this.content.addEventListener('dragleave', (e) => {
+			this.content.classList.remove('drag-over');
+		});
+		
+		this.content.addEventListener('drop', (e) => {
+			e.preventDefault();
+			this.content.classList.remove('drag-over');
+			
+			// FIX: Don't check e.target === this.content strictly.
+			// Since groups stop propagation, if the event reaches here,
+			// it means it was dropped "outside" any group (i.e., on the root list).
+			const data = e.dataTransfer.getData('text/plain');
+			if (data) {
+				try {
+					const payload = JSON.parse(data);
+					if (payload && payload.id) {
+						this.manager.groupManager.ungroupObject(payload.id);
+					}
+				} catch (err) {
+					console.error('Drop error', err);
+				}
+			}
+		});
+	}
+	
 	render () {
 		this.content.innerHTML = '';
 		
@@ -47,7 +82,8 @@ export class TreeView {
 		
 		// 2. Render Ungrouped Objects
 		const groupedIds = this.manager.groups.flatMap(g => g.objectIds);
-		const ungroupedObjects = this.manager.placedObjects.filter(obj => !groupedIds.includes(obj.id));
+		// FIX: Safety check for obj existence
+		const ungroupedObjects = this.manager.placedObjects.filter(obj => obj && !groupedIds.includes(obj.id));
 		
 		// Sort alphabetically
 		ungroupedObjects.sort((a, b) => a.name.localeCompare(b.name));
@@ -57,7 +93,14 @@ export class TreeView {
 		});
 		
 		// Re-apply highlights based on current selection
-		const currentSelection = this.manager.selectedMeshes.map(m => this.manager.placedObjects.find(o => o.id === m.metadata.id)).filter(Boolean);
+		// FIX: Robust check to prevent crash if selectedMeshes contains disposed items or placedObjects has issues
+		const currentSelection = this.manager.selectedMeshes
+			.map(m => {
+				if (!m || !m.metadata) return null;
+				return this.manager.placedObjects.find(o => o && o.id === m.metadata.id);
+			})
+			.filter(Boolean);
+		
 		this.highlightSelection(currentSelection);
 	}
 	
@@ -66,9 +109,62 @@ export class TreeView {
 		groupContainer.className = 'tree-group';
 		groupContainer.dataset.groupId = group.id;
 		
+		// Apply collapsed state
+		if (this.collapsedGroups.has(group.id)) {
+			groupContainer.classList.add('collapsed');
+		}
+		
+		// Drag & Drop for Group (Target)
+		groupContainer.addEventListener('dragover', (e) => {
+			e.preventDefault();
+			e.stopPropagation(); // Prevent bubbling to root
+			e.dataTransfer.dropEffect = 'move';
+			groupContainer.classList.add('drag-over');
+		});
+		
+		groupContainer.addEventListener('dragleave', (e) => {
+			groupContainer.classList.remove('drag-over');
+		});
+		
+		groupContainer.addEventListener('drop', (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			groupContainer.classList.remove('drag-over');
+			
+			const data = e.dataTransfer.getData('text/plain');
+			if (data) {
+				try {
+					const payload = JSON.parse(data);
+					if (payload && payload.id) {
+						// Move object to this group
+						this.manager.groupManager.moveObjectToGroup(payload.id, group.id);
+					}
+				} catch (err) { console.error(err); }
+			}
+		});
+		
 		// Header
 		const header = document.createElement('div');
 		header.className = 'tree-group-header';
+		
+		const titleContainer = document.createElement('div');
+		titleContainer.style.display = 'flex';
+		titleContainer.style.alignItems = 'center';
+		
+		// Toggle Icon
+		const toggleIcon = document.createElement('span');
+		toggleIcon.className = 'group-toggle-icon';
+		toggleIcon.innerText = '▼';
+		toggleIcon.onclick = (e) => {
+			e.stopPropagation();
+			if (this.collapsedGroups.has(group.id)) {
+				this.collapsedGroups.delete(group.id);
+				groupContainer.classList.remove('collapsed');
+			} else {
+				this.collapsedGroups.add(group.id);
+				groupContainer.classList.add('collapsed');
+			}
+		};
 		
 		const titleSpan = document.createElement('span');
 		titleSpan.innerText = group.name;
@@ -93,9 +189,12 @@ export class TreeView {
 			input.onblur = saveName;
 			input.onkeydown = (ev) => { if (ev.key === 'Enter') saveName(); };
 			
-			header.replaceChild(input, titleSpan);
+			titleContainer.replaceChild(input, titleSpan);
 			input.focus();
 		};
+		
+		titleContainer.appendChild(toggleIcon);
+		titleContainer.appendChild(titleSpan);
 		
 		// Actions (Delete)
 		const actions = document.createElement('div');
@@ -112,12 +211,18 @@ export class TreeView {
 		};
 		actions.appendChild(btnDelete);
 		
-		header.appendChild(titleSpan);
+		header.appendChild(titleContainer);
 		header.appendChild(actions);
 		
-		// Select all in group on click
+		// Select all in group on click (supports multi-select)
 		header.onclick = (e) => {
-			if (!e.shiftKey && !e.ctrlKey) {
+			if (e.shiftKey || e.ctrlKey || e.metaKey) {
+				// Additive selection
+				const currentIds = this.manager.selectedMeshes.map(m => m.metadata.id);
+				const newIds = [...new Set([...currentIds, ...group.objectIds])];
+				this.manager.selectObjectsByIds(newIds);
+			} else {
+				// Exclusive selection
 				this.manager.selectObjectsByIds(group.objectIds);
 			}
 		};
@@ -130,7 +235,7 @@ export class TreeView {
 		
 		// Find objects belonging to this group
 		const groupObjects = group.objectIds
-			.map(id => this.manager.placedObjects.find(o => o.id === id))
+			.map(id => this.manager.placedObjects.find(o => o && o.id === id))
 			.filter(Boolean);
 		
 		groupObjects.sort((a, b) => a.name.localeCompare(b.name));
@@ -147,6 +252,13 @@ export class TreeView {
 		const item = document.createElement('div');
 		item.className = 'tree-item';
 		item.dataset.id = obj.id;
+		item.draggable = true; // Enable drag
+		
+		// Drag Start
+		item.addEventListener('dragstart', (e) => {
+			e.dataTransfer.setData('text/plain', JSON.stringify({ id: obj.id }));
+			e.dataTransfer.effectAllowed = 'move';
+		});
 		
 		// Icon based on type
 		const icon = document.createElement('span');
@@ -173,7 +285,6 @@ export class TreeView {
 				const rangeItems = allItems.slice(start, end + 1);
 				const ids = rangeItems.map(el => el.dataset.id);
 				
-				// Add to existing selection if Ctrl is also held, else replace?
 				// Standard behavior is replace for Shift-Click range
 				this.manager.selectObjectsByIds(ids);
 			} else if (e.ctrlKey || e.metaKey) {
@@ -210,10 +321,12 @@ export class TreeView {
 		
 		// Check Groups: If all items in a group are selected, highlight header
 		this.manager.groups.forEach(group => {
-			const allSelected = group.objectIds.every(id => selectedIds.includes(id));
-			if (allSelected && group.objectIds.length > 0) {
-				const groupEl = this.content.querySelector(`.tree-group[data-group-id="${group.id}"] .tree-group-header`);
-				if (groupEl) groupEl.classList.add('selected');
+			if (group.objectIds.length > 0) {
+				const allSelected = group.objectIds.every(id => selectedIds.includes(id));
+				if (allSelected) {
+					const groupEl = this.content.querySelector(`.tree-group[data-group-id="${group.id}"] .tree-group-header`);
+					if (groupEl) groupEl.classList.add('selected');
+				}
 			}
 		});
 	}

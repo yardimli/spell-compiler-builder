@@ -57,4 +57,36 @@ export class GroupManager {
 		// Cleanup empty groups
 		this.om.groups = this.om.groups.filter(g => g.objectIds.length > 0);
 	}
+	
+	// NEW: Move object to a specific group (Drag & Drop support)
+	moveObjectToGroup (objectId, targetGroupId) {
+		// 1. Remove from all groups first
+		this.om.groups.forEach(g => {
+			g.objectIds = g.objectIds.filter(id => id !== objectId);
+		});
+		
+		// 2. Add to target group
+		const targetGroup = this.om.groups.find(g => g.id === targetGroupId);
+		if (targetGroup) {
+			if (!targetGroup.objectIds.includes(objectId)) {
+				targetGroup.objectIds.push(objectId);
+			}
+		}
+		
+		// 3. Cleanup empty groups (except the target, though it shouldn't be empty now)
+		this.om.groups = this.om.groups.filter(g => g.objectIds.length > 0 || g.id === targetGroupId);
+		
+		if (this.om.onListChange) this.om.onListChange();
+	}
+	
+	// NEW: Remove object from any group (Drag to root support)
+	ungroupObject (objectId) {
+		this.om.groups.forEach(g => {
+			g.objectIds = g.objectIds.filter(id => id !== objectId);
+		});
+		// Cleanup empty groups
+		this.om.groups = this.om.groups.filter(g => g.objectIds.length > 0);
+		
+		if (this.om.onListChange) this.om.onListChange();
+	}
 }

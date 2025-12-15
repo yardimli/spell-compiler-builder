@@ -29,6 +29,7 @@ TypeError: Cannot read properties of null (reading 'id')
 - allow selecting multiple groups
 - disable text selection in the tree view when clicking and dragging to select multiple items as it is confusing
 
+- redesign the sidebar so map controls are menus on the top of the application and the status bar is at the bottom of the application, map builder assets should be like scene objects and collapsible on the left side of the application
 
 - locked items on the canvas should not be selectable from the canvas only treeview should select them
 - in tree view show icon next to locked items

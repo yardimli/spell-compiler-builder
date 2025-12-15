@@ -275,6 +275,7 @@ input[type="color"] { width: 100%; height: 30px; border: none; padding: 0; curso
     height: 40px; /* Collapsed height */
     overflow: hidden;
     box-shadow: -2px 2px 8px rgba(0,0,0,0.3);
+    user-select: none; /* Disable text selection */
 }
 
 #tree-view.expanded {
@@ -303,6 +304,12 @@ input[type="color"] { width: 100%; height: 30px; border: none; padding: 0; curso
     background: #233342;
 }
 
+/* Drag and Drop Visual Cues */
+#tree-content.drag-over {
+    background: #2c3e50;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+}
+
 .tree-item {
     padding: 4px 10px 4px 20px;
     font-size: 13px;
@@ -319,6 +326,11 @@ input[type="color"] { width: 100%; height: 30px; border: none; padding: 0; curso
 .tree-group {
     background: #2c3e50;
     margin-bottom: 2px;
+}
+
+/* Drag over style for groups */
+.tree-group.drag-over {
+    border: 2px dashed #f1c40f;
 }
 
 .tree-group-header {
@@ -340,18 +352,34 @@ input[type="color"] { width: 100%; height: 30px; border: none; padding: 0; curso
     display: block;
 }
 
+/* Collapsed state for groups */
+.tree-group.collapsed .tree-group-items {
+    display: none;
+}
+
 .tree-group-items .tree-item {
     padding-left: 30px; /* Indent group items */
     border-left: 3px solid transparent;
 }
 
 .tree-icon { margin-right: 8px; font-size: 10px; opacity: 0.7; }
-.tree-group-actions { display: flex; gap: 5px; }
+.tree-group-actions { display: flex; gap: 5px; align-items: center; }
 .btn-tree-action {
     background: none; border: none; color: #bdc3c7; cursor: pointer; padding: 0 4px; font-size: 12px;
 }
 .btn-tree-action:hover { color: white; }
 .btn-tree-action.delete:hover { color: #e74c3c; }
+
+/* Group toggle icon */
+.group-toggle-icon {
+    font-size: 10px;
+    margin-right: 5px;
+    transition: transform 0.2s;
+    display: inline-block;
+}
+.tree-group.collapsed .group-toggle-icon {
+    transform: rotate(-90deg);
+}
 
 /* Rename Input in Tree */
 .tree-rename-input {
@@ -362,4 +390,3 @@ input[type="color"] { width: 100%; height: 30px; border: none; padding: 0; curso
     color: #2c3e50;
     font-size: 12px;
 }
-
