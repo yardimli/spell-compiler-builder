@@ -10,12 +10,16 @@ export class PropertyPanel {
 		this.multiView = document.getElementById('multi-obj-props');
 		this.multiList = document.getElementById('multi-select-container');
 		
-		// Gizmo Buttons
+		// Gizmo Buttons (Now in Top Bar)
 		this.gizmoBtns = {
 			pos: document.getElementById('btnGizmoPos'),
 			rot: document.getElementById('btnGizmoRot'),
 			scale: document.getElementById('btnGizmoScale')
 		};
+		
+		// Action Buttons (Now in Top Bar)
+		this.btnDuplicate = document.getElementById('btnDuplicate');
+		this.btnDelete = document.getElementById('btnDeleteObj');
 		
 		// Cache inputs with safety check
 		const getEl = (id) => {
@@ -80,7 +84,7 @@ export class PropertyPanel {
 		}
 	}
 	
-	setupGizmoControls() {
+	setupGizmoControls () {
 		const setMode = (mode, btn) => {
 			this.objectManager.setGizmoMode(mode);
 			// Update UI
@@ -96,7 +100,7 @@ export class PropertyPanel {
 		window.addEventListener('keydown', (e) => {
 			if (e.target.tagName === 'INPUT') return; // Ignore if typing
 			
-			switch(e.key.toLowerCase()) {
+			switch (e.key.toLowerCase()) {
 				case 'g': setMode('position', this.gizmoBtns.pos); break;
 				case 'r': setMode('rotation', this.gizmoBtns.rot); break;
 				case 's': setMode('scaling', this.gizmoBtns.scale); break;
@@ -174,17 +178,15 @@ export class PropertyPanel {
 		}
 		
 		// Delete
-		const btnDelete = document.getElementById('btnDeleteObj');
-		if (btnDelete) {
-			btnDelete.onclick = () => {
+		if (this.btnDelete) {
+			this.btnDelete.onclick = () => {
 				this.objectManager.deleteSelected();
 			};
 		}
 		
 		// Duplicate
-		const btnDuplicate = document.getElementById('btnDuplicate');
-		if (btnDuplicate) {
-			btnDuplicate.onclick = () => {
+		if (this.btnDuplicate) {
+			this.btnDuplicate.onclick = () => {
 				this.objectManager.duplicateSelection();
 			};
 		}
@@ -219,9 +221,18 @@ export class PropertyPanel {
 		if (!this.panel) return;
 		
 		this.isUpdatingUI = true;
-		const btnDuplicate = document.getElementById('btnDuplicate');
 		
-		if (!dataArray || dataArray.length === 0) {
+		const hasSelection = dataArray && dataArray.length > 0;
+		
+		// Update Top Bar Action Buttons
+		if (this.btnDuplicate) this.btnDuplicate.disabled = !hasSelection;
+		if (this.btnDelete) this.btnDelete.disabled = !hasSelection;
+		
+		// Update Gizmo Buttons (Optional: Disable if no selection, or keep active to indicate mode)
+		// Usually gizmo buttons stay enabled to switch modes, but the gizmo itself hides.
+		// We'll keep them enabled to allow mode switching even without selection.
+		
+		if (!hasSelection) {
 			this.panel.style.display = 'none';
 			this.currentObjectId = null;
 		} else if (dataArray.length === 1) {
@@ -229,8 +240,6 @@ export class PropertyPanel {
 			this.panel.style.display = 'flex';
 			this.singleView.style.display = 'block';
 			this.multiView.style.display = 'none';
-			
-			if (btnDuplicate) btnDuplicate.innerText = "Duplicate Object";
 			
 			const data = dataArray[0];
 			this.currentObjectId = data.id;
@@ -267,8 +276,6 @@ export class PropertyPanel {
 			this.panel.style.display = 'flex';
 			this.singleView.style.display = 'none';
 			this.multiView.style.display = 'block';
-			
-			if (btnDuplicate) btnDuplicate.innerText = `Duplicate Selected (${dataArray.length})`;
 			
 			this.currentObjectId = null;
 			

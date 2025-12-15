@@ -28,6 +28,19 @@
 			<button id="btnRedo" class="secondary" disabled title="Redo (Ctrl+Y)">↷ Redo</button>
 		</div>
 		
+		<!-- Gizmo Controls (Moved from Property Panel) -->
+		<div class="menu-group">
+			<button id="btnGizmoPos" class="active" title="Move (G)">Move</button>
+			<button id="btnGizmoRot" title="Rotate (R)">Rotate</button>
+			<button id="btnGizmoScale" title="Scale (S)">Scale</button>
+		</div>
+		
+		<!-- Object Actions (Moved from Property Panel) -->
+		<div class="menu-group">
+			<button id="btnDuplicate" disabled title="Duplicate Selected">Duplicate</button>
+			<button id="btnDeleteObj" class="danger" disabled title="Delete Selected">Delete</button>
+		</div>
+		
 		<div class="menu-group">
 			<button id="btnAddLight" title="Add Point Light">💡 Add Light</button>
 			<button id="btnResetCam" class="secondary">Reset Camera</button>
@@ -65,132 +78,120 @@
 		<!-- Canvas -->
 		<canvas id="renderCanvas"></canvas>
 		
-		<!-- Right Side Tree View -->
-		<div id="tree-view">
-			<div id="tree-header">
-				<span>Scene Objects</span>
-				<span id="tree-toggle-icon">▼</span>
-			</div>
-			<div id="tree-content">
-				<!-- Tree items injected by JS -->
-			</div>
-		</div>
-		
-		<!-- Floating Property Panel -->
-		<div id="properties-panel">
-			<!-- Gizmo Toolbar -->
-			<div class="prop-group" id="gizmo-toolbar" style="display: flex; gap: 5px; justify-content: center; border-bottom: 1px solid #34495e; padding-bottom: 10px; margin-bottom: 10px;">
-				<button id="btnGizmoPos" class="info active" title="Move (G)">Move</button>
-				<button id="btnGizmoRot" class="secondary" title="Rotate (R)">Rotate</button>
-				<button id="btnGizmoScale" class="secondary" title="Scale (S)">Scale</button>
-			</div>
-			
-			<!-- Lock Toggle (Global for single/multi) -->
-			<div class="prop-group">
-				<div class="prop-row" style="justify-content: flex-start;">
-					<input type="checkbox" id="chkLock" style="width: auto; margin-right: 8px;">
-					<label for="chkLock" style="margin: 0; cursor: pointer; color: white;">Lock Object(s)</label>
-				</div>
-			</div>
-			
-			<!-- Shared Properties (Color & Transforms) -->
-			<div id="shared-props">
-				<div class="prop-group">
-					<label>Tint Color</label>
-					<input type="color" id="propTint" value="#ffffff">
-				</div>
+		<!-- Right Sidebar: Properties + Tree View -->
+		<div id="right-sidebar">
+			<!-- Properties Panel (Merged here) -->
+			<div id="properties-panel">
 				
+				<!-- Lock Toggle (Global for single/multi) -->
 				<div class="prop-group">
-					<label>Position</label>
-					<div class="prop-row compact">
-						<div class="input-col"><span>X</span><input type="number" id="posX" step="0.1"></div>
-						<div class="input-col"><span>Y</span><input type="number" id="posY" step="0.1"></div>
-						<div class="input-col"><span>Z</span><input type="number" id="posZ" step="0.1"></div>
+					<div class="prop-row" style="justify-content: flex-start;">
+						<input type="checkbox" id="chkLock" style="width: auto; margin-right: 8px;">
+						<label for="chkLock" style="margin: 0; cursor: pointer; color: white;">Lock Object(s)</label>
 					</div>
 				</div>
 				
-				<div class="prop-group">
-					<label>Rotation (Degrees)</label>
-					<div class="prop-row compact">
-						<div class="input-col"><span>X</span><input type="number" id="rotX" step="15"></div>
-						<div class="input-col"><span>Y</span><input type="number" id="rotY" step="15"></div>
-						<div class="input-col"><span>Z</span><input type="number" id="rotZ" step="15"></div>
+				<!-- Shared Properties (Color & Transforms) -->
+				<div id="shared-props">
+					<!-- Single Object Specifics -->
+					<div id="single-obj-props">
+						<div class="prop-group">
+							<input type="text" id="propName">
+						</div>
 					</div>
-				</div>
-				
-				<div class="prop-group">
-					<label>Scale</label>
-					<div class="prop-row compact">
-						<div class="input-col"><span>X</span><input type="number" id="scaleX" step="0.1"></div>
-						<div class="input-col"><span>Y</span><input type="number" id="scaleY" step="0.1"></div>
-						<div class="input-col"><span>Z</span><input type="number" id="scaleZ" step="0.1"></div>
-					</div>
-				</div>
-			</div>
-			
-			<!-- Single Object Specifics -->
-			<div id="single-obj-props">
-				<div class="prop-group">
-					<label>Name</label>
-					<input type="text" id="propName">
-				</div>
-			</div>
-			
-			<!-- Multi Object View -->
-			<div id="multi-obj-props" style="display: none;">
-				<div class="prop-group">
-					<label>Alignment</label>
-					
-					<!-- X Axis -->
-					<div class="align-grid">
-						<span>X</span>
-						<button id="btnAlignXMin" class="secondary" title="Align Left">Min</button>
-						<button id="btnAlignXCenter" class="secondary" title="Align Center X">Mid</button>
-						<button id="btnAlignXMax" class="secondary" title="Align Right">Max</button>
+
+					<div class="prop-group">
+						<input type="color" id="propTint" value="#ffffff">
 					</div>
 					
-					<!-- Y Axis -->
-					<div class="align-grid">
-						<span>Y</span>
-						<button id="btnAlignYMin" class="secondary" title="Align Bottom">Bot</button>
-						<button id="btnAlignYCenter" class="secondary" title="Align Center Y">Mid</button>
-						<button id="btnAlignYMax" class="secondary" title="Align Top">Top</button>
+					<div class="prop-group">
+						<div class="prop-row compact">
+							<div class="input-col"><span>Pos: X</span><input type="number" id="posX" step="0.1"></div>
+							<div class="input-col"><span>Y</span><input type="number" id="posY" step="0.1"></div>
+							<div class="input-col"><span>Z</span><input type="number" id="posZ" step="0.1"></div>
+						</div>
 					</div>
 					
-					<!-- Z Axis -->
-					<div class="align-grid">
-						<span>Z</span>
-						<button id="btnAlignZMin" class="secondary" title="Align Back">Min</button>
-						<button id="btnAlignZCenter" class="secondary" title="Align Center Z">Mid</button>
-						<button id="btnAlignZMax" class="secondary" title="Align Front">Max</button>
+					<div class="prop-group">
+						<div class="prop-row compact">
+							<div class="input-col"><span>Rot: X</span><input type="number" id="rotX" step="15"></div>
+							<div class="input-col"><span>Y</span><input type="number" id="rotY" step="15"></div>
+							<div class="input-col"><span>Z</span><input type="number" id="rotZ" step="15"></div>
+						</div>
+					</div>
+					
+					<div class="prop-group">
+						<div class="prop-row compact">
+							<div class="input-col"><span>Scale: X</span><input type="number" id="scaleX" step="0.1"></div>
+							<div class="input-col"><span>Y</span><input type="number" id="scaleY" step="0.1"></div>
+							<div class="input-col"><span>Z</span><input type="number" id="scaleZ" step="0.1"></div>
+						</div>
 					</div>
 				</div>
 				
-				<!-- Spacing Group -->
-				<div class="prop-group">
-					<label>Space Side-by-Side</label>
-					<div class="control-row">
-						<button id="btnSnapX" class="secondary" title="Snap objects together on X axis">Snap X</button>
-						<button id="btnSnapY" class="secondary" title="Snap objects together on Y axis">Snap Y</button>
-						<button id="btnSnapZ" class="secondary" title="Snap objects together on Z axis">Snap Z</button>
+				<!-- Multi Object View -->
+				<div id="multi-obj-props" style="display: none;">
+					<div class="prop-group">
+						<label>Alignment</label>
+						
+						<!-- X Axis -->
+						<div class="align-grid">
+							<span>X</span>
+							<button id="btnAlignXMin" class="secondary" title="Align Left">Min</button>
+							<button id="btnAlignXCenter" class="secondary" title="Align Center X">Mid</button>
+							<button id="btnAlignXMax" class="secondary" title="Align Right">Max</button>
+						</div>
+						
+						<!-- Y Axis -->
+						<div class="align-grid">
+							<span>Y</span>
+							<button id="btnAlignYMin" class="secondary" title="Align Bottom">Bot</button>
+							<button id="btnAlignYCenter" class="secondary" title="Align Center Y">Mid</button>
+							<button id="btnAlignYMax" class="secondary" title="Align Top">Top</button>
+						</div>
+						
+						<!-- Z Axis -->
+						<div class="align-grid">
+							<span>Z</span>
+							<button id="btnAlignZMin" class="secondary" title="Align Back">Min</button>
+							<button id="btnAlignZCenter" class="secondary" title="Align Center Z">Mid</button>
+							<button id="btnAlignZMax" class="secondary" title="Align Front">Max</button>
+						</div>
 					</div>
-				</div>
-				
-				<!-- Grouping Control -->
-				<div class="prop-group">
-					<label>Grouping</label>
-					<button id="btnCreateGroup" class="info">Group Selected Objects</button>
-				</div>
-				
-				<div class="prop-group">
-					<label>Selected Objects</label>
-					<div id="multi-select-container"></div>
+					
+					<!-- Spacing Group -->
+					<div class="prop-group">
+						<label>Space Side-by-Side</label>
+						<div class="control-row">
+							<button id="btnSnapX" class="secondary" title="Snap objects together on X axis">Snap X</button>
+							<button id="btnSnapY" class="secondary" title="Snap objects together on Y axis">Snap Y</button>
+							<button id="btnSnapZ" class="secondary" title="Snap objects together on Z axis">Snap Z</button>
+						</div>
+					</div>
+					
+					<!-- Grouping Control -->
+					<div class="prop-group">
+						<label>Grouping</label>
+						<button id="btnCreateGroup" class="info" style="width: 100%;">Group Selected</button>
+					</div>
+					
+					<div class="prop-group">
+						<label>Selected Objects</label>
+						<div id="multi-select-container"></div>
+					</div>
 				</div>
 			</div>
 			
-			<!-- Buttons (Global for selection) -->
-			<button id="btnDuplicate" class="info" style="margin-bottom: 5px;">Duplicate</button>
-			<button id="btnDeleteObj" class="danger">Delete Object(s)</button>
+			<!-- Tree View (Existing) -->
+			<div id="tree-view">
+				<div id="tree-header">
+					<span>Scene Objects</span>
+					<span id="tree-toggle-icon">▼</span>
+				</div>
+				<div id="tree-content">
+					<!-- Tree items injected by JS -->
+				</div>
+			</div>
 		</div>
 	</div>
 	

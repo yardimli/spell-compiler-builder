@@ -138,7 +138,7 @@ export class ObjectManager {
 				file: filename, // Stores "folder/file.glb"
 				type: 'mesh',
 				isLocked: false,
-				color: '#ffffff',
+				color: null, // Changed from '#ffffff' to prevent overwriting original colors on reload
 				position: root.position.asArray(),
 				rotation: root.rotationQuaternion ? root.rotationQuaternion.toEulerAngles().asArray() : root.rotation.asArray(),
 				scaling: root.scaling.asArray()
@@ -196,7 +196,7 @@ export class ObjectManager {
 					file: filename,
 					type: 'mesh',
 					isLocked: false,
-					color: '#ffffff',
+					color: null, // Changed from '#ffffff' to prevent overwriting original colors on reload
 					position: mesh.position.asArray(),
 					rotation: mesh.rotationQuaternion ? mesh.rotationQuaternion.toEulerAngles().asArray() : mesh.rotation.asArray(),
 					scaling: mesh.scaling.asArray()
@@ -251,6 +251,7 @@ export class ObjectManager {
 			name: name,
 			type: 'light',
 			isLocked: false,
+			color: null, // Added for consistency
 			position: light.position.asArray(),
 			rotation: [0, 0, 0],
 			scaling: [1, 1, 1]

@@ -120,7 +120,7 @@ export class OperationManager {
 				type: originalData.type || 'mesh',
 				file: originalData.file,
 				isLocked: false,
-				color: originalData.color || '#ffffff',
+				color: originalData.color, // Preserves null if original was null
 				position: newRoot.position.asArray(),
 				rotation: newRoot.rotationQuaternion ? newRoot.rotationQuaternion.toEulerAngles().asArray() : newRoot.rotation.asArray(),
 				scaling: newRoot.scaling.asArray()
