@@ -441,16 +441,38 @@ export class ObjectManager {
 	}
 	
 	applyColorToMesh (root, hexColor) {
-		const color = BABYLON.Color3.FromHexString(hexColor);
 		const meshes = root.getChildMeshes(false);
 		if (root.material) meshes.push(root);
 		
 		meshes.forEach(m => {
-			if (m.material) {
-				if (!m.material.name.includes('_tinted')) {
-					m.material = m.material.clone(m.material.name + '_tinted');
+			if (!m.material) return;
+			
+			// Init Original Material Reference
+			// We store this on the mesh instance to allow reverting at runtime
+			if (!m.reservedOriginalMaterial) {
+				m.reservedOriginalMaterial = m.material;
+			}
+			
+			if (hexColor === null) {
+				// RESET: Revert to original material if we have strayed
+				if (m.material !== m.reservedOriginalMaterial) {
+					const tintedMaterial = m.material;
+					m.material = m.reservedOriginalMaterial;
+					// Dispose the tinted clone to clean up
+					tintedMaterial.dispose();
+				}
+			} else {
+				// APPLY
+				const color = BABYLON.Color3.FromHexString(hexColor);
+				
+				// If we are currently using the original material, we need to clone it first
+				if (m.material === m.reservedOriginalMaterial) {
+					const cloneName = m.material.name + '_tinted_' + root.metadata.id;
+					const newMat = m.material.clone(cloneName);
+					m.material = newMat;
 				}
 				
+				// Apply Color to current material (which is now guaranteed to be the clone)
 				if (m.material instanceof BABYLON.PBRMaterial) {
 					m.material.albedoColor = color;
 				} else if (m.material instanceof BABYLON.StandardMaterial) {

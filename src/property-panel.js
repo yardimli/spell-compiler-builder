@@ -49,6 +49,9 @@ export class PropertyPanel {
 			}
 		};
 		
+		// Reset Tint Button
+		this.btnResetTint = getEl('btnResetTint');
+		
 		// Alignment Buttons (Expanded)
 		this.alignButtons = {
 			xMin: getEl('btnAlignXMin'),
@@ -141,6 +144,19 @@ export class PropertyPanel {
 					// Multi-object color update
 					this.objectManager.updateMultipleObjectsProperty('color', e.target.value);
 				}
+			};
+		}
+		
+		// Reset Tint
+		if (this.btnResetTint) {
+			this.btnResetTint.onclick = () => {
+				if (this.currentObjectId) {
+					this.objectManager.updateObjectProperty(this.currentObjectId, 'color', null);
+				} else {
+					this.objectManager.updateMultipleObjectsProperty('color', null);
+				}
+				// Visually reset picker to white
+				if (this.inputs.tint) this.inputs.tint.value = '#ffffff';
 			};
 		}
 		
