@@ -11,7 +11,7 @@ export class BuilderUI {
 		// LocalStorage Keys
 		this.LS_SETTINGS_KEY = 'builder_global_settings';
 		this.LS_SIDEBAR_KEY = 'builder_sidebar_state';
-		this.LS_CONTROLS_KEY = 'builder_controls_state';
+		// Controls key removed as controls are now in top bar
 		
 		// Default Global Settings
 		this.globalSettings = {
@@ -53,7 +53,7 @@ export class BuilderUI {
 		}
 		
 		this.setupControls();
-		this.setupCollapsibleControls();
+		this.setupLeftSidebarToggle();
 		this.setupHistoryUI();
 		this.setupSettingsModal();
 		this.setupSaveModal();
@@ -277,23 +277,15 @@ export class BuilderUI {
 		});
 	}
 	
-	setupCollapsibleControls () {
-		const header = document.getElementById('controls-header');
-		const content = document.getElementById('controls-content');
+	setupLeftSidebarToggle () {
+		const sidebar = document.getElementById('left-sidebar');
+		const header = document.getElementById('left-sidebar-header');
 		
-		// Load state
-		const isCollapsed = localStorage.getItem(this.LS_CONTROLS_KEY) === 'true';
-		
-		if (isCollapsed) {
-			header.classList.add('collapsed');
-			content.classList.add('hidden');
+		if (header && sidebar) {
+			header.onclick = () => {
+				sidebar.classList.toggle('collapsed');
+			};
 		}
-		
-		header.addEventListener('click', () => {
-			const collapsed = header.classList.toggle('collapsed');
-			content.classList.toggle('hidden');
-			localStorage.setItem(this.LS_CONTROLS_KEY, collapsed);
-		});
 	}
 	
 	setupControls () {

@@ -30,10 +30,10 @@ export class TreeView {
 		this.header.onclick = () => {
 			this.isExpanded = !this.isExpanded;
 			if (this.isExpanded) {
-				this.container.classList.add('expanded');
+				this.container.classList.add('collapsed');
 				this.toggleIcon.style.transform = 'rotate(180deg)';
 			} else {
-				this.container.classList.remove('expanded');
+				this.container.classList.remove('collapsed');
 				this.toggleIcon.style.transform = 'rotate(0deg)';
 			}
 		};
@@ -265,10 +265,18 @@ export class TreeView {
 		icon.innerText = obj.type === 'light' ? '💡' : '📦';
 		
 		const text = document.createElement('span');
-		text.innerText = obj.name + (obj.isLocked ? ' 🔒' : '');
+		text.innerText = obj.name;
 		
 		item.appendChild(icon);
 		item.appendChild(text);
+		
+		// Lock Icon
+		if (obj.isLocked) {
+			const lockIcon = document.createElement('span');
+			lockIcon.className = 'tree-lock-icon';
+			lockIcon.innerText = '🔒';
+			item.appendChild(lockIcon);
+		}
 		
 		// Click Selection Logic
 		item.onclick = (e) => {

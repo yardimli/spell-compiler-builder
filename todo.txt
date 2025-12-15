@@ -1,31 +1,14 @@
 #TODO
 
-#TODO 8
-- create a new js file for managing object groups called tree-view.js
-- add a object tree view that can be turned collapsed or full height of the screen. it will use absolute positioning on the right side of the screen and show on top of the canvas when open. it will show all objects and groups in a hierarchical view.
-- add object grouping functionality, allow user to group multiple selected objects into a single group (add group button in property panel when multiple objects are selected)
-- only allow one level of grouping (no nested groups)
-- groups are for management dont add any hierarchy to the scene itself
-- clicking on an object or group in the tree view will select it in the canvas
-- allow renaming groups in the tree view
-- allow user to select multiple objects in the tree view using shift key
-- when user clicks on a group name in the tree view it will select all objects inside that group on the tree view and the canvas
-- allow deleting groups from tree view (deleting a group will not delete the objects inside just ungroup them)
-
-BUG: deleting an asset breaks the tree view with error
-- allow user to drag an asset on the tree view into a group to add it to that group
-- allow user to drag an asset out of a group to ungroup it
-- groups should be collapsible in the tree view
-- allow selecting multiple groups
-- disable text selection in the tree view when clicking and dragging to select multiple items as it is confusing
-
-- redesign the sidebar so map controls are moved to a new menu bar on the top of the application and create a status bar at the bottom of the application both are always visible, map builder assets should be like scene objects and collapsible on the left side of the application
-
-- locked items on the canvas should not be selectable from the canvas only treeview should select them
-- in tree view show icon next to locked items
-
-
 #TODO 9
+- add asset folders functionality
+- in assets there are now an objects subfolder which contains multiple folders each representing a category of objects
+- in the assets sidebar add a dropdown at the top to select the asset object folder to show its contents
+- update thumbnails generation to save thumbnails in cache folder under a subfolder with the name of the asset object folder
+- when selected show the load assets button that will load the assets from the selected folder only and generate thumbnails for them if they dont exist
+
+
+#TODO 10
 - make light button open a dropdown with Pointlight, DirectionalLight, HemisphericLight
 - add property panel for lights to adjust color diffuse and specular for all 3 types and groundColor for HemisphericLight
 - add property panel for lights to adjust location for Pointlight
@@ -56,11 +39,6 @@ var createScene = function () {
 
 };
 export default createScene
-
-#TODO 10
-- add asset folders functionality
-- scan all asset folders for thumbnails, store thumbnails in new folder in cache with the name of the asset folder
-- in the assets sidebar add a dropdown at the top to select the asset folder to show
 
 
 
@@ -132,3 +110,28 @@ in the grid make the current size 50% smaller for how each grid size is rendered
 - when multiple objects are selected for position, rotation, scale only allow user to edit in property panel for all selected objects similar to the way they are moved
 - when multiple objects are selected allow user to change color for all in property panel
 - make undo/redo work with keyboard shortcuts ctrl+z and ctrl+y
+
+#TODO 8
+- create a new js file for managing object groups called tree-view.js
+- add a object tree view that can be turned collapsed or full height of the screen. it will use absolute positioning on the right side of the screen and show on top of the canvas when open. it will show all objects and groups in a hierarchical view.
+- add object grouping functionality, allow user to group multiple selected objects into a single group (add group button in property panel when multiple objects are selected)
+- only allow one level of grouping (no nested groups)
+- groups are for management dont add any hierarchy to the scene itself
+- clicking on an object or group in the tree view will select it in the canvas
+- allow renaming groups in the tree view
+- allow user to select multiple objects in the tree view using shift key
+- when user clicks on a group name in the tree view it will select all objects inside that group on the tree view and the canvas
+- allow deleting groups from tree view (deleting a group will not delete the objects inside just ungroup them)
+
+BUG: deleting an asset breaks the tree view with error
+- allow user to drag an asset on the tree view into a group to add it to that group
+- allow user to drag an asset out of a group to ungroup it
+- groups should be collapsible in the tree view
+- allow selecting multiple groups
+- disable text selection in the tree view when clicking and dragging to select multiple items as it is confusing
+
+- redesign the sidebar so map controls are moved to a new menu bar on the top of the application and create a status bar at the bottom of the application both are always visible, map builder assets should be like scene objects and collapsible on the left side of the application
+
+- locked items on the canvas should not be selectable from the canvas only treeview should select them
+- in tree view show icon next to locked items
+- make grid lines thinner

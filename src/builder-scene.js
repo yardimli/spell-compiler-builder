@@ -187,9 +187,9 @@ export class BuilderScene {
 	}
 	
 	createGrid (gridSize) {
-		const width = 200;
-		const height = 200;
-		const textureResolution = 2048;
+		const width = 100;
+		const height = 100;
+		const textureResolution = 9182; // High res for better clarity
 		
 		if (!this.groundMesh) {
 			this.groundMesh = BABYLON.MeshBuilder.CreateGround('ground', { width: width, height: height }, this.scene);
@@ -209,7 +209,7 @@ export class BuilderScene {
 		// Background (Canvas Background Color setting)
 		const gradient = ctx.createLinearGradient(0, 0, 0, textureResolution);
 		// Darken the bottom slightly for depth, but base it on the setting
-		gradient.addColorStop(0, this.shadeColor(this.gridBgColor, -20));
+		gradient.addColorStop(0, this.shadeColor(this.gridBgColor, -60));
 		gradient.addColorStop(1, this.gridBgColor);
 		ctx.fillStyle = gradient;
 		ctx.fillRect(0, 0, textureResolution, textureResolution);
@@ -353,6 +353,13 @@ export class BuilderScene {
 			}
 			
 			if (mesh && mesh.metadata && mesh.metadata.isObject) {
+				// Check if object is locked
+				const objData = this.objectManager.placedObjects.find(o => o.id === mesh.metadata.id);
+				if (objData && objData.isLocked) {
+					// Prevent selection from canvas if locked
+					return;
+				}
+				
 				// Select logic (handles toggle for multi-select inside manager)
 				this.objectManager.selectObject(mesh, isMultiSelect);
 			}
