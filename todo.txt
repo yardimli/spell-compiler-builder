@@ -1,23 +1,5 @@
 #TODO
 
-#TODO 9
-- add asset objects folders functionality
-- in assets there are now an objects subfolder which contains multiple folders each representing a category of objects
-- in the assets sidebar add a dropdown at the top to select the asset object folder to show its contents
-- update thumbnails generation to save thumbnails in cache folder under a subfolder with the name of the asset object folder
-- when selected show the load assets button that will load the assets from the selected folder only and generate thumbnails for them if they dont exist
-- BUG: when aligning objects with the buttons the scene updates but when i save and load the scene the object positions are not updated properly
-- on the scene objects remember collapsed state between sessions using local storage
-- on the scene remember last selected assets and reselect them on load
-- allow user to select locked assets with shift+click
-- merge the object inspector to be part of the scene objects sidebar on the right
-- assets with colors when first added to the scene have colors but later when the scene is reloaded the colors are gone and they are all gray
-- in color add reset button that will reset the color to null (default texture color)
--on the ui put name, object color and the reset button on the same row, the object color should be a square sized
-- when adding a new asset, user should select it first from the left sidebar, the selected asset should be highlighted, then when clicking on the canvas it will add the selected asset to the clicked place on the grid. if another asset is already selected it should add it above the existing one as it is now. The selection should remain so subsequent clicks will add more of the same asset until another asset is selected from the sidebar or the selection is cleared (add a clear selection button on the top menubar it should both clear any objects selected on the scene and in the asset sidebar, esc key should do the same)
-- when one or more objects are selected make the arrow keys move the selection on the x,z planes if the user press shift up/down arrow keys should move it on the y plane. on the top menubar add a small numeric input for cursor increment default is 0.05 with increments in 0.05
-- when panning the camera with ctrl if user press ctrl+shift allow panning in the 3rd axis that it is not panning in
-
 #TODO 10
 - make light button open a dropdown with Pointlight, DirectionalLight, HemisphericLight
 - add property panel for lights to adjust color diffuse and specular for all 3 types and groundColor for HemisphericLight
@@ -28,6 +10,7 @@
 
 #TODO 11
 - add camera to the scene, allow user to drag, rotate and zoom the camera, allow user to view scene from camera perspective or default perspective
+- add smart snap, when multiple objects are selected allow user to select an anchor object from the selected objects in the treeview with right click, show a temporary anchor icon, when anchor is selected the other objects will snap to the anchor object and each other to without overlapping.
 
 
 
@@ -150,3 +133,22 @@ BUG: deleting an asset breaks the tree view with error
 - locked items on the canvas should not be selectable from the canvas only treeview should select them
 - in tree view show icon next to locked items
 - make grid lines thinner
+
+#TODO 9
+- add asset objects folders functionality
+- in assets there are now an objects subfolder which contains multiple folders each representing a category of objects
+- in the assets sidebar add a dropdown at the top to select the asset object folder to show its contents
+- update thumbnails generation to save thumbnails in cache folder under a subfolder with the name of the asset object folder
+- when selected show the load assets button that will load the assets from the selected folder only and generate thumbnails for them if they dont exist
+- BUG: when aligning objects with the buttons the scene updates but when i save and load the scene the object positions are not updated properly
+- on the scene objects remember collapsed state between sessions using local storage
+- on the scene remember last selected assets and reselect them on load
+- allow user to select locked assets with shift+click
+- merge the object inspector to be part of the scene objects sidebar on the right
+- assets with colors when first added to the scene have colors but later when the scene is reloaded the colors are gone and they are all gray
+- in color add reset button that will reset the color to null (default texture color)
+-on the ui put name, object color and the reset button on the same row, the object color should be a square sized
+- when adding a new asset, user should select it first from the left sidebar, the selected asset should be highlighted, then when clicking on the canvas it will add the selected asset to the clicked place on the grid. if another asset is already selected it should add it above the existing one as it is now. The selection should remain so subsequent clicks will add more of the same asset until another asset is selected from the sidebar or the selection is cleared (add a clear selection button on the top menubar it should both clear any objects selected on the scene and in the asset sidebar, esc key should do the same)
+- when one or more objects are selected make the arrow keys move the selection on the x,z planes if the user press shift up/down arrow keys should move it on the y plane. on the top menubar add a small numeric input for cursor increment default is 0.05 with increments in 0.05
+- when panning the camera with ctrl if user press ctrl+shift allow panning in the 3rd axis that it is not panning in
+
