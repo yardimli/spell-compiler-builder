@@ -28,14 +28,14 @@
 			<button id="btnRedo" class="secondary" disabled title="Redo (Ctrl+Y)">↷ Redo</button>
 		</div>
 		
-		<!-- Gizmo Controls (Moved from Property Panel) -->
+		<!-- Gizmo Controls -->
 		<div class="menu-group">
 			<button id="btnGizmoPos" class="active" title="Move (G)">Move</button>
 			<button id="btnGizmoRot" title="Rotate (R)">Rotate</button>
 			<button id="btnGizmoScale" title="Scale (S)">Scale</button>
 		</div>
 		
-		<!-- Object Actions (Moved from Property Panel) -->
+		<!-- Object Actions -->
 		<div class="menu-group">
 			<button id="btnDuplicate" disabled title="Duplicate Selected">Duplicate</button>
 			<button id="btnDeleteObj" class="danger" disabled title="Delete Selected">Delete</button>
@@ -52,7 +52,7 @@
 		</div>
 	</div>
 	
-	<!-- Main Content: Left Panel + Canvas + Right Panel -->
+	<!-- Main Content -->
 	<div id="main-content">
 		<!-- Left Sidebar: Assets -->
 		<div id="left-sidebar">
@@ -60,7 +60,6 @@
 				<span>Map Builder Assets</span>
 				<span id="sidebar-toggle-icon">▼</span>
 			</div>
-			<!-- Folder Selection Dropdown -->
 			<div style="padding: 5px 10px; background: #233342; border-bottom: 1px solid #1a252f;">
 				<select id="asset-folder-select" style="width: 100%; padding: 4px; background: #34495e; color: white; border: 1px solid #46607a; border-radius: 3px;">
 					<option value="" disabled selected>Select Folder...</option>
@@ -80,10 +79,10 @@
 		
 		<!-- Right Sidebar: Properties + Tree View -->
 		<div id="right-sidebar">
-			<!-- Properties Panel (Merged here) -->
+			<!-- Properties Panel -->
 			<div id="properties-panel">
 				
-				<!-- Lock Toggle (Global for single/multi) -->
+				<!-- Lock Toggle -->
 				<div class="prop-group">
 					<div class="prop-row" style="justify-content: flex-start;">
 						<input type="checkbox" id="chkLock" style="width: auto; margin-right: 8px;">
@@ -91,21 +90,20 @@
 					</div>
 				</div>
 				
-				<!-- Shared Properties (Color & Transforms) -->
+				<!-- Shared Properties -->
 				<div id="shared-props">
-					<!-- Single Object Specifics -->
+					<!-- Single Object Specifics (Name + Color + Reset) -->
 					<div id="single-obj-props">
 						<div class="prop-group">
-							<input type="text" id="propName">
+							<div class="name-color-row">
+								<input type="text" id="propName" placeholder="Object Name" title="Object Name">
+								<input type="color" id="propTint" class="square-color" value="#ffffff" title="Object Color">
+								<button id="btnResetTint" class="btn-reset-color" title="Reset to original color">↺</button>
+							</div>
 						</div>
 					</div>
 					
-					<div class="prop-group">
-						<div class="color-row">
-							<input type="color" id="propTint" value="#ffffff">
-							<button id="btnResetTint" class="btn-reset-color" title="Reset to original color">↺</button>
-						</div>
-					</div>
+					<!-- Removed separate Tint Color group from shared-props -->
 					
 					<div class="prop-group">
 						<div class="prop-row compact">
@@ -134,9 +132,19 @@
 				
 				<!-- Multi Object View -->
 				<div id="multi-obj-props" style="display: none;">
+					<!-- Multi-Select Color Control -->
+					<div class="prop-group">
+						<div class="prop-row" style="justify-content: space-between;">
+							<label style="margin:0;">Tint Color</label>
+							<div style="display:flex; gap:5px;">
+								<input type="color" id="propTintMulti" class="square-color" value="#ffffff" title="Object Color">
+								<button id="btnResetTintMulti" class="btn-reset-color" title="Reset to original color">↺</button>
+							</div>
+						</div>
+					</div>
+					
 					<div class="prop-group">
 						<label>Alignment</label>
-						
 						<!-- X Axis -->
 						<div class="align-grid">
 							<span>X</span>
@@ -144,7 +152,6 @@
 							<button id="btnAlignXCenter" class="secondary" title="Align Center X">Mid</button>
 							<button id="btnAlignXMax" class="secondary" title="Align Right">Max</button>
 						</div>
-						
 						<!-- Y Axis -->
 						<div class="align-grid">
 							<span>Y</span>
@@ -152,7 +159,6 @@
 							<button id="btnAlignYCenter" class="secondary" title="Align Center Y">Mid</button>
 							<button id="btnAlignYMax" class="secondary" title="Align Top">Top</button>
 						</div>
-						
 						<!-- Z Axis -->
 						<div class="align-grid">
 							<span>Z</span>
@@ -185,15 +191,13 @@
 				</div>
 			</div>
 			
-			<!-- Tree View (Existing) -->
+			<!-- Tree View -->
 			<div id="tree-view">
 				<div id="tree-header">
 					<span>Scene Objects</span>
 					<span id="tree-toggle-icon">▼</span>
 				</div>
-				<div id="tree-content">
-					<!-- Tree items injected by JS -->
-				</div>
+				<div id="tree-content"></div>
 			</div>
 		</div>
 	</div>
@@ -207,38 +211,32 @@
 		</div>
 	</div>
 	
-	<!-- Global Settings Modal -->
+	<!-- Modals (Settings, Grid, Save) -->
 	<div id="settingsModal" class="modal-overlay">
 		<div class="modal-content">
 			<div class="modal-header">Global Settings</div>
-			
 			<div class="control-group">
 				<label>New Object Y-Offset:</label>
 				<input type="number" id="settingYOffset" step="0.1" value="0">
 			</div>
-			
 			<div class="control-group">
 				<label>Grid Cell Size:</label>
 				<input type="number" id="settingGridSize" step="0.5" min="0.5" value="2.5">
 			</div>
-			
 			<div class="control-group">
 				<label>Grid Line Color:</label>
 				<input type="color" id="settingGridColor" value="#555555">
 			</div>
-			
 			<div class="control-group">
 				<label>Canvas Background Color:</label>
 				<input type="color" id="settingBgColor" value="#2c3e50">
 			</div>
-			
 			<div class="control-group" style="margin-top: 10px; border-top: 1px solid #34495e; padding-top: 10px;">
 				<label style="color: #2ecc71;">Session:</label>
 				<div class="control-row">
 					<label><input type="checkbox" id="settingAutoSave" checked> Auto-Save Map (LocalStorage)</label>
 				</div>
 			</div>
-			
 			<div class="modal-footer">
 				<button id="btnCancelSettings" class="secondary">Cancel</button>
 				<button id="btnSaveSettings">Save & Apply</button>
@@ -246,21 +244,17 @@
 		</div>
 	</div>
 	
-	<!-- Grid Creation Modal -->
 	<div id="gridModal" class="modal-overlay">
 		<div class="modal-content">
 			<div class="modal-header">Add Object Grid</div>
-			
 			<div class="control-group">
 				<label>Rows:</label>
 				<input type="number" id="gridRows" value="3" min="1">
 			</div>
-			
 			<div class="control-group">
 				<label>Columns:</label>
 				<input type="number" id="gridCols" value="3" min="1">
 			</div>
-			
 			<div class="modal-footer">
 				<button id="btnCancelGrid" class="secondary">Cancel</button>
 				<button id="btnCreateGrid">Create Grid</button>
@@ -268,16 +262,13 @@
 		</div>
 	</div>
 	
-	<!-- Save Map Modal -->
 	<div id="saveMapModal" class="modal-overlay">
 		<div class="modal-content">
 			<div class="modal-header">Save Map</div>
-			
 			<div class="control-group">
 				<label>Map Name:</label>
 				<input type="text" id="saveMapName" value="new_map">
 			</div>
-			
 			<div class="modal-footer">
 				<button id="btnCancelSave" class="secondary">Cancel</button>
 				<button id="btnConfirmSave">Save</button>

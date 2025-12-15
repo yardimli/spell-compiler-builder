@@ -10,14 +10,14 @@ export class PropertyPanel {
 		this.multiView = document.getElementById('multi-obj-props');
 		this.multiList = document.getElementById('multi-select-container');
 		
-		// Gizmo Buttons (Now in Top Bar)
+		// Gizmo Buttons
 		this.gizmoBtns = {
 			pos: document.getElementById('btnGizmoPos'),
 			rot: document.getElementById('btnGizmoRot'),
 			scale: document.getElementById('btnGizmoScale')
 		};
 		
-		// Action Buttons (Now in Top Bar)
+		// Action Buttons
 		this.btnDuplicate = document.getElementById('btnDuplicate');
 		this.btnDelete = document.getElementById('btnDeleteObj');
 		
@@ -31,7 +31,8 @@ export class PropertyPanel {
 		this.inputs = {
 			name: getEl('propName'),
 			lock: getEl('chkLock'),
-			tint: getEl('propTint'), // New Tint Input
+			tint: getEl('propTint'), // Single Tint
+			tintMulti: getEl('propTintMulti'), // Multi Tint
 			pos: {
 				x: getEl('posX'),
 				y: getEl('posY'),
@@ -49,10 +50,11 @@ export class PropertyPanel {
 			}
 		};
 		
-		// Reset Tint Button
+		// Reset Tint Buttons
 		this.btnResetTint = getEl('btnResetTint');
+		this.btnResetTintMulti = getEl('btnResetTintMulti');
 		
-		// Alignment Buttons (Expanded)
+		// Alignment Buttons
 		this.alignButtons = {
 			xMin: getEl('btnAlignXMin'),
 			xCenter: getEl('btnAlignXCenter'),
@@ -65,7 +67,7 @@ export class PropertyPanel {
 			zMax: getEl('btnAlignZMax')
 		};
 		
-		// Spacing Buttons (New)
+		// Spacing Buttons
 		this.snapButtons = {
 			x: getEl('btnSnapX'),
 			y: getEl('btnSnapY'),
@@ -135,28 +137,37 @@ export class PropertyPanel {
 			};
 		}
 		
-		// Tint Color
+		// Tint Color (Single)
 		if (this.inputs.tint) {
 			this.inputs.tint.onchange = (e) => {
 				if (this.currentObjectId) {
 					this.objectManager.updateObjectProperty(this.currentObjectId, 'color', e.target.value);
-				} else {
-					// Multi-object color update
-					this.objectManager.updateMultipleObjectsProperty('color', e.target.value);
 				}
 			};
 		}
 		
-		// Reset Tint
+		// Tint Color (Multi)
+		if (this.inputs.tintMulti) {
+			this.inputs.tintMulti.onchange = (e) => {
+				this.objectManager.updateMultipleObjectsProperty('color', e.target.value);
+			};
+		}
+		
+		// Reset Tint (Single)
 		if (this.btnResetTint) {
 			this.btnResetTint.onclick = () => {
 				if (this.currentObjectId) {
 					this.objectManager.updateObjectProperty(this.currentObjectId, 'color', null);
-				} else {
-					this.objectManager.updateMultipleObjectsProperty('color', null);
+					if (this.inputs.tint) this.inputs.tint.value = '#ffffff';
 				}
-				// Visually reset picker to white
-				if (this.inputs.tint) this.inputs.tint.value = '#ffffff';
+			};
+		}
+		
+		// Reset Tint (Multi)
+		if (this.btnResetTintMulti) {
+			this.btnResetTintMulti.onclick = () => {
+				this.objectManager.updateMultipleObjectsProperty('color', null);
+				if (this.inputs.tintMulti) this.inputs.tintMulti.value = '#ffffff';
 			};
 		}
 		
@@ -244,10 +255,6 @@ export class PropertyPanel {
 		if (this.btnDuplicate) this.btnDuplicate.disabled = !hasSelection;
 		if (this.btnDelete) this.btnDelete.disabled = !hasSelection;
 		
-		// Update Gizmo Buttons (Optional: Disable if no selection, or keep active to indicate mode)
-		// Usually gizmo buttons stay enabled to switch modes, but the gizmo itself hides.
-		// We'll keep them enabled to allow mode switching even without selection.
-		
 		if (!hasSelection) {
 			this.panel.style.display = 'none';
 			this.currentObjectId = null;
@@ -268,7 +275,7 @@ export class PropertyPanel {
 				this.inputs.lock.indeterminate = false;
 			}
 			
-			// Tint Color
+			// Tint Color (Single)
 			if (this.inputs.tint) {
 				this.inputs.tint.value = data.color || '#ffffff';
 			}
@@ -311,9 +318,9 @@ export class PropertyPanel {
 				}
 			}
 			
-			// Determine Color (Use first, or white if mixed? Just use first for now)
-			if (this.inputs.tint) {
-				this.inputs.tint.value = dataArray[0].color || '#ffffff';
+			// Determine Color (Use first, or white if mixed)
+			if (this.inputs.tintMulti) {
+				this.inputs.tintMulti.value = dataArray[0].color || '#ffffff';
 			}
 			
 			// Determine Transforms (Use Proxy Transform)

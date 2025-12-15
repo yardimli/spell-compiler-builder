@@ -264,12 +264,36 @@ body, html {
 .align-grid span { color: #95a5a6; font-weight: bold; text-align: center; }
 .align-grid button { padding: 4px; font-size: 10px; }
 
-/* Color Row with Reset Button */
+/* Color Row with Reset Button (Legacy/Multi) */
 .color-row {
     display: flex;
     gap: 5px;
     align-items: center;
 }
+
+/* New Combined Row for Name and Color */
+.name-color-row {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.name-color-row input[type="text"] {
+    flex: 1;
+    min-width: 0; /* Prevent overflow */
+}
+
+/* Square Color Input */
+.square-color {
+    width: 30px !important; /* Override default 100% width */
+    height: 30px;
+    border: 1px solid #34495e;
+    padding: 0;
+    cursor: pointer;
+    background: none;
+    flex-shrink: 0;
+}
+
 .btn-reset-color {
     padding: 0 8px;
     height: 30px;
@@ -282,6 +306,7 @@ body, html {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 .btn-reset-color:hover {
     background: #d35400;
