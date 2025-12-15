@@ -355,7 +355,8 @@ export class BuilderScene {
 			if (mesh && mesh.metadata && mesh.metadata.isObject) {
 				// Check if object is locked
 				const objData = this.objectManager.placedObjects.find(o => o.id === mesh.metadata.id);
-				if (objData && objData.isLocked) {
+				// Allow selection if Shift (isMultiSelect) is pressed, even if locked
+				if (objData && objData.isLocked && !isMultiSelect) {
 					// Prevent selection from canvas if locked
 					return;
 				}
