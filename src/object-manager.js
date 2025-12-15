@@ -9,6 +9,7 @@ import { OperationManager } from './managers/operation-manager';
 // Updated root path for assets
 const ASSET_ROOT = './assets/objects/';
 const LS_AUTOSAVE_KEY = 'builder_autosave_map';
+const LS_SELECTION_KEY = 'builder_selection_state';
 
 export class ObjectManager {
 	constructor (scene, shadowGenerator) {
@@ -277,6 +278,7 @@ export class ObjectManager {
 		this.placedObjects = this.placedObjects.filter(o => o && o.id !== id);
 	}
 	
+	// Modified to return a Promise so we can await completion during load
 	restoreObject (data) {
 		if (data.type === 'light') {
 			const light = new BABYLON.PointLight(data.name, BABYLON.Vector3.FromArray(data.position), this.scene);
@@ -290,12 +292,11 @@ export class ObjectManager {
 			sphere.setParent(light);
 			
 			this.placedObjects.push(data);
-			if (this.onListChange) this.onListChange(); // Trigger update for sync items
+			if (this.onListChange) this.onListChange();
+			return Promise.resolve();
 		} else {
-			// Handle legacy files (no slash) vs new files (with folder slash)
-			// If data.file is just "rock.glb", we might need to assume a default folder or search
-			// But for now, assume data.file is correct relative to ASSET_ROOT
-			BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, data.file, this.scene).then(res => {
+			// Return the promise from ImportMeshAsync
+			return BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, data.file, this.scene).then(res => {
 				const root = res.meshes[0];
 				root.name = data.name;
 				root.position = BABYLON.Vector3.FromArray(data.position);
@@ -315,7 +316,9 @@ export class ObjectManager {
 				}
 				
 				this.placedObjects.push(data);
-				if (this.onListChange) this.onListChange(); // Trigger update for async items
+				if (this.onListChange) this.onListChange();
+			}).catch(e => {
+				console.error("Failed to restore object:", data.name, e);
 			});
 		}
 	}
@@ -467,7 +470,8 @@ export class ObjectManager {
 		};
 	}
 	
-	loadMapData (data) {
+	// Modified to be async to support waiting for assets to load before selecting
+	async loadMapData (data) {
 		[...this.scene.meshes].forEach(m => {
 			if (m.metadata && m.metadata.isObject) m.dispose();
 		});
@@ -488,7 +492,9 @@ export class ObjectManager {
 		if (this.onListChange) this.onListChange();
 		
 		if (data.assets) {
-			data.assets.forEach(item => this.restoreObject(item));
+			// Wait for all assets to be restored
+			const promises = data.assets.map(item => this.restoreObject(item));
+			await Promise.all(promises);
 		}
 	}
 	
@@ -500,16 +506,35 @@ export class ObjectManager {
 		if (!this.autoSaveEnabled) return false;
 		const data = this.getMapData('autosave');
 		localStorage.setItem(LS_AUTOSAVE_KEY, JSON.stringify(data));
+		
+		// Save Selection State
+		const selectedIds = this.selectedMeshes.map(m => m.metadata.id);
+		localStorage.setItem(LS_SELECTION_KEY, JSON.stringify(selectedIds));
+		
 		return true;
 	}
 	
-	loadFromAutoSave () {
+	async loadFromAutoSave () {
 		const saved = localStorage.getItem(LS_AUTOSAVE_KEY);
 		if (saved) {
 			try {
 				const data = JSON.parse(saved);
 				console.log('Restoring auto-saved map...');
-				this.loadMapData(data);
+				await this.loadMapData(data);
+				
+				// Restore Selection State after map is fully loaded
+				const savedSelection = localStorage.getItem(LS_SELECTION_KEY);
+				if (savedSelection) {
+					try {
+						const ids = JSON.parse(savedSelection);
+						if (Array.isArray(ids) && ids.length > 0) {
+							this.selectObjectsByIds(ids);
+						}
+					} catch (e) {
+						console.error('Failed to load selection state', e);
+					}
+				}
+				
 			} catch (e) {
 				console.error('Failed to load auto-save', e);
 			}

@@ -67,6 +67,9 @@ export class AlignmentManager {
 			if (axis === 'y') mesh.position.y += delta;
 			if (axis === 'z') mesh.position.z += delta;
 			
+			// BUG FIX: Force world matrix update so absolutePosition is correct for storage
+			mesh.computeWorldMatrix(true);
+			
 			const newData = {
 				position: mesh.absolutePosition.asArray(),
 				rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),

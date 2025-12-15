@@ -6,7 +6,7 @@
 - in the assets sidebar add a dropdown at the top to select the asset object folder to show its contents
 - update thumbnails generation to save thumbnails in cache folder under a subfolder with the name of the asset object folder
 - when selected show the load assets button that will load the assets from the selected folder only and generate thumbnails for them if they dont exist
-
+------- NOT DONE YET -------
 - BUG: when aligning objects with the buttons the scene updates but when i save and load the scene the object positions are not updated properly
 - on the scene objects remember collapsed state between sessions using local storage
 - on the scene remember last selected assets and reselect them on load

@@ -10,6 +10,10 @@ export class TreeView {
 		this.lastClickedIndex = -1; // For shift-click logic
 		this.collapsedGroups = new Set(); // Track collapsed state of groups
 		
+		// Local Storage Key
+		this.LS_TREE_STATE = 'builder_tree_state';
+		
+		this.loadState();
 		this.setupUI();
 		this.setupDragDropRoot(); // Setup drop on root area
 		
@@ -23,6 +27,27 @@ export class TreeView {
 				this.highlightSelection(data);
 			};
 		}
+	}
+	
+	loadState () {
+		const savedState = localStorage.getItem(this.LS_TREE_STATE);
+		if (savedState) {
+			try {
+				const parsed = JSON.parse(savedState);
+				if (parsed.collapsedGroups) {
+					this.collapsedGroups = new Set(parsed.collapsedGroups);
+				}
+			} catch (e) {
+				console.error('Failed to load tree state', e);
+			}
+		}
+	}
+	
+	saveState () {
+		const state = {
+			collapsedGroups: Array.from(this.collapsedGroups)
+		};
+		localStorage.setItem(this.LS_TREE_STATE, JSON.stringify(state));
 	}
 	
 	setupUI () {
@@ -162,6 +187,8 @@ export class TreeView {
 				this.collapsedGroups.add(group.id);
 				groupContainer.classList.add('collapsed');
 			}
+			// Save state on toggle
+			this.saveState();
 		};
 		
 		const titleSpan = document.createElement('span');
