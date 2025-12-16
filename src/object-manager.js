@@ -5,6 +5,7 @@ import { GroupManager } from './managers/group-manager';
 import { AlignmentManager } from './managers/alignment-manager';
 import { PropertyManager } from './managers/property-manager';
 import { OperationManager } from './managers/operation-manager';
+import { SnapManager } from './managers/snap-manager'; // NEW
 
 // Updated root path for assets
 const ASSET_ROOT = './assets/objects/';
@@ -51,6 +52,7 @@ export class ObjectManager {
 		this.alignmentManager = new AlignmentManager(this);
 		this.propertyManager = new PropertyManager(this);
 		this.operationManager = new OperationManager(this);
+		this.snapManager = new SnapManager(this); // NEW
 	}
 
 	get gridSize () { return this._gridSize; }
@@ -60,7 +62,7 @@ export class ObjectManager {
 	}
 
 	// --- Gizmo Delegation ---
-	get gizmoManager () { return this.gizmoController.gizmoManager; } // Backwards compatibility for Scene
+	get gizmoManager () { return this.gizmoController.gizmoManager; }
 	setGizmoMode (mode) { this.gizmoController.setMode(mode); }
 	updateGizmoSettings () { this.gizmoController.updateGizmoSettings(); }
 
@@ -84,9 +86,12 @@ export class ObjectManager {
 	deleteSelected () { this.operationManager.deleteSelected(); }
 	duplicateSelection () { this.operationManager.duplicateSelection(); }
 
+	// --- Snap Delegation (NEW) ---
+	setAnchor (mesh) { this.snapManager.setAnchor(mesh); }
+	releaseAnchor () { this.snapManager.clearAnchor(); }
+
 	// --- NEW: Asset Selection Logic ---
 	setActiveAsset (file) {
-		// If clicking the same asset or null, clear it
 		if (this.activeAssetFile === file || file === null) {
 			this.activeAssetFile = null;
 			this.clearGhost();
@@ -108,7 +113,6 @@ export class ObjectManager {
 		try {
 			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, file, this.scene);
 			if (this.activeAssetFile !== file) {
-				// User switched assets while loading
 				result.meshes.forEach(m => m.dispose());
 				return;
 			}
@@ -116,40 +120,30 @@ export class ObjectManager {
 			this.ghostMesh = result.meshes[0];
 			this.ghostMesh.name = "ghost_asset";
 
-			// Normalize hierarchy
 			this.ghostMesh.computeWorldMatrix(true);
 			result.meshes.forEach(m => {
-				m.isPickable = false; // Raycast must pass through ghost
+				m.isPickable = false;
 				m.checkCollisions = false;
-				// Make semi-transparent
 				m.visibility = 0.5;
-				// Ensure it doesn't cast shadows
 				if (this.shadowGenerator) {
 					this.shadowGenerator.removeShadowCaster(m);
 				}
 				m.receiveShadows = false;
-
-				// Tag as ghost for raycast filtering
 				if (!m.metadata) m.metadata = {};
 				m.metadata.isGhost = true;
 			});
 
-			// Calculate Bounds Once (Fix for jumping bug)
-			// We calculate the offset required to bring the bottom of the mesh to the pivot point.
 			const bounds = this.ghostMesh.getHierarchyBoundingVectors();
 			this.ghostOffset = -bounds.min.y;
 
-			// Store local bounds (assuming mesh is at 0,0,0 currently)
 			this.ghostBoundsLocal = {
 				min: bounds.min.clone(),
 				max: bounds.max.clone()
 			};
 
-			// Initial position off-screen until mouse move
 			this.ghostMesh.position = new BABYLON.Vector3(0, -1000, 0);
 			this.isGhostLoading = false;
 
-			// NEW: Sync ghost transform with selected object if it matches
 			this.updateGhostTransformFromSelection();
 
 		} catch (e) {
@@ -165,17 +159,14 @@ export class ObjectManager {
 		}
 	}
 
-	// NEW: Helper to sync ghost transform with selected object
 	updateGhostTransformFromSelection () {
 		if (!this.ghostMesh || !this.activeAssetFile) return;
 
 		let shouldCopy = false;
 		let sourceMesh = null;
 
-		// Only apply if exactly one object is selected
 		if (this.selectedMeshes.length === 1) {
 			const mesh = this.selectedMeshes[0];
-			// Check if metadata exists and file matches the active asset
 			if (mesh.metadata && mesh.metadata.isObject && mesh.metadata.file === this.activeAssetFile) {
 				shouldCopy = true;
 				sourceMesh = mesh;
@@ -183,22 +174,16 @@ export class ObjectManager {
 		}
 
 		if (shouldCopy && sourceMesh) {
-			// Ensure ghost has rotationQuaternion
 			if (!this.ghostMesh.rotationQuaternion) {
 				this.ghostMesh.rotationQuaternion = new BABYLON.Quaternion();
 			}
-
-			// Copy Rotation
 			if (sourceMesh.rotationQuaternion) {
 				this.ghostMesh.rotationQuaternion.copyFrom(sourceMesh.rotationQuaternion);
 			} else {
 				BABYLON.Quaternion.FromEulerVectorToRef(sourceMesh.rotation, this.ghostMesh.rotationQuaternion);
 			}
-
-			// Copy Scaling
 			this.ghostMesh.scaling.copyFrom(sourceMesh.scaling);
 		} else {
-			// Reset to defaults if no match or multiple selection
 			if (this.ghostMesh.rotationQuaternion) {
 				this.ghostMesh.rotationQuaternion.copyFromFloats(0, 0, 0, 1);
 			} else {
@@ -208,16 +193,16 @@ export class ObjectManager {
 		}
 	}
 
+	// REFACTORED: Uses SnapManager
 	updateGhostPosition (pickInfo) {
 		if (!this.ghostMesh || this.isGhostLoading || !pickInfo.hit) return;
 
 		let targetPos = pickInfo.pickedPoint.clone();
 		let isStacked = false;
 
-		// 1. Stacking Logic: If we clicked an object, stack on top
+		// 1. Stacking Logic
 		if (pickInfo.pickedMesh && pickInfo.pickedMesh.name !== 'ground') {
 			let mesh = pickInfo.pickedMesh;
-			// Find root
 			while (mesh && (!mesh.metadata || !mesh.metadata.isObject) && mesh.parent) {
 				mesh = mesh.parent;
 			}
@@ -230,110 +215,40 @@ export class ObjectManager {
 			}
 		}
 
-		// Apply Y Offset (Fix for jumping bug: use cached offset instead of recalculating from world bounds)
 		targetPos.y += this.ghostOffset;
 		if (!isStacked) {
 			targetPos.y += this.defaultYOffset;
 		}
 
-		// 2. Snapping Logic (Only if we have selected meshes)
-		if (this.selectedMeshes.length > 0 && this.ghostBoundsLocal) {
-			const snapThreshold = 2.0; // Distance to trigger snap
-			let bestSnap = null;
-			let minDistance = snapThreshold;
+		// 2. Snapping Logic (Delegated to SnapManager)
+		// Determine targets: Anchor takes priority, otherwise selected meshes
+		let snapTargets = [];
+		if (this.snapManager.anchorMesh) {
+			snapTargets = [this.snapManager.anchorMesh];
+		} else if (this.selectedMeshes.length > 0) {
+			snapTargets = this.selectedMeshes;
+		}
 
-			// --- 1. Calculate Ghost Points (OBB) ---
-			// Construct local points from the cached local bounds
-			const lMin = this.ghostBoundsLocal.min;
-			const lMax = this.ghostBoundsLocal.max;
-			const lCenter = lMin.add(lMax).scale(0.5);
+		if (snapTargets.length > 0 && this.ghostBoundsLocal) {
+			const snapOffset = this.snapManager.calculateSnapOffset(
+				targetPos,
+				this.ghostBoundsLocal,
+				this.ghostMesh.rotationQuaternion || BABYLON.Quaternion.FromEulerVector(this.ghostMesh.rotation),
+				this.ghostMesh.scaling,
+				snapTargets
+			);
 
-			// 9 points on the bottom face (Y = lMin.y)
-			const localPoints = [
-				new BABYLON.Vector3(lMin.x, lMin.y, lMin.z),
-				new BABYLON.Vector3(lCenter.x, lMin.y, lMin.z),
-				new BABYLON.Vector3(lMax.x, lMin.y, lMin.z),
-				new BABYLON.Vector3(lMin.x, lMin.y, lCenter.z),
-				new BABYLON.Vector3(lCenter.x, lMin.y, lCenter.z),
-				new BABYLON.Vector3(lMax.x, lMin.y, lCenter.z),
-				new BABYLON.Vector3(lMin.x, lMin.y, lMax.z),
-				new BABYLON.Vector3(lCenter.x, lMin.y, lMax.z),
-				new BABYLON.Vector3(lMax.x, lMin.y, lMax.z)
-			];
-
-			// Transform to World Space using Ghost's current transform + targetPos
-			const rotation = this.ghostMesh.rotationQuaternion || BABYLON.Quaternion.FromEulerVector(this.ghostMesh.rotation);
-			const scaling = this.ghostMesh.scaling;
-			const matrix = BABYLON.Matrix.Compose(scaling, rotation, targetPos);
-
-			const ghostWorldPoints = localPoints.map(p => BABYLON.Vector3.TransformCoordinates(p, matrix));
-
-			// --- 2. Calculate Target Points (OBB of parts) ---
-			for (const selectedMesh of this.selectedMeshes) {
-				const targetWorldPoints = [];
-
-				// Get pickable meshes in hierarchy
-				const meshes = selectedMesh.getChildMeshes(false, (m) => m.isEnabled() && m.isVisible && m.isPickable);
-				if (selectedMesh.isPickable) meshes.push(selectedMesh);
-
-				// Collect corners and midpoints from OBBs
-				meshes.forEach(m => {
-					const box = m.getBoundingInfo().boundingBox;
-					const v = box.vectorsWorld; // 8 corners
-
-					// Add Corners
-					for (const p of v) targetWorldPoints.push(p);
-
-					// Add Midpoints of edges (Bottom Face: 0-3, Top Face: 4-7)
-					// Bottom
-					targetWorldPoints.push(v[0].add(v[1]).scale(0.5));
-					targetWorldPoints.push(v[1].add(v[2]).scale(0.5));
-					targetWorldPoints.push(v[2].add(v[3]).scale(0.5));
-					targetWorldPoints.push(v[3].add(v[0]).scale(0.5));
-					// Top
-					targetWorldPoints.push(v[4].add(v[5]).scale(0.5));
-					targetWorldPoints.push(v[5].add(v[6]).scale(0.5));
-					targetWorldPoints.push(v[6].add(v[7]).scale(0.5));
-					targetWorldPoints.push(v[7].add(v[4]).scale(0.5));
-				});
-
-				// Fallback if no geometry found
-				if (targetWorldPoints.length === 0) {
-					targetWorldPoints.push(selectedMesh.absolutePosition.clone());
-				}
-
-				// Find closest match
-				for (const gp of ghostWorldPoints) {
-					for (const tp of targetWorldPoints) {
-						const dx = tp.x - gp.x;
-						const dz = tp.z - gp.z;
-						// NEW: Calculate Y diff to snap vertically
-						const dy = tp.y - gp.y;
-
-						const dist = Math.sqrt(dx * dx + dz * dz);
-
-						if (dist < minDistance) {
-							minDistance = dist;
-							// NEW: Store Y diff
-							bestSnap = { x: dx, y: dy, z: dz };
-						}
-					}
-				}
-			}
-
-			if (bestSnap) {
-				targetPos.x += bestSnap.x;
-				targetPos.y += bestSnap.y; // NEW: Apply Y snap
-				targetPos.z += bestSnap.z;
+			if (snapOffset) {
+				targetPos.x += snapOffset.x;
+				targetPos.y += snapOffset.y;
+				targetPos.z += snapOffset.z;
 			}
 		}
 
-		// Update Ghost Position
 		this.ghostMesh.position = targetPos;
-		this.ghostPosition = targetPos; // Store for final placement
+		this.ghostPosition = targetPos;
 	}
 
-	// --- Nudge Logic (Arrow Keys) ---
 	nudgeSelection (x, y, z) {
 		if (this.selectedMeshes.length === 0) return;
 
@@ -386,10 +301,6 @@ export class ObjectManager {
 		}
 	}
 
-	// --- Asset Spawning (Core Responsibility) ---
-
-	// filename now includes folder path e.g. "nature/rock.glb"
-	// explicitPosition: Optional Vector3. If provided, skips calculation logic.
 	async addAsset (filename, explicitPosition = null) {
 		try {
 			let targetX = 0;
@@ -399,12 +310,10 @@ export class ObjectManager {
 
 			if (explicitPosition) {
 				targetX = explicitPosition.x;
-				baseY = explicitPosition.y; // Explicit position usually includes Y offset already
+				baseY = explicitPosition.y;
 				targetZ = explicitPosition.z;
 				useExplicit = true;
 			} else {
-				// Fallback logic if no position provided (e.g. double click sidebar?)
-				// Only use selection-based centering if NOT in active placement mode
 				if (this.selectedMeshes.length === 1) {
 					const baseMesh = this.selectedMeshes[0];
 					const bounds = baseMesh.getHierarchyBoundingVectors();
@@ -415,7 +324,6 @@ export class ObjectManager {
 			}
 
 			const id = BABYLON.Tools.RandomId();
-			// Extract base name from full path "nature/rock.glb" -> "rock"
 			const baseName = filename.split('/').pop().replace(/\.glb$/i, '');
 			const existing = this.placedObjects.filter(o => o.name && o.name.startsWith(baseName));
 
@@ -430,7 +338,6 @@ export class ObjectManager {
 
 			const uniqueName = `${baseName}_${maxIndex + 1}`;
 
-			// Use ASSET_ROOT + filename (which includes subfolder)
 			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, filename, this.scene);
 			const root = result.meshes[0];
 
@@ -438,9 +345,7 @@ export class ObjectManager {
 
 			root.computeWorldMatrix(true);
 
-			// NEW: Apply transform from ghost (which mirrors selection) if applicable
 			if (this.ghostMesh && this.activeAssetFile === filename) {
-				// Sync ghost first to ensure it matches current selection state
 				this.updateGhostTransformFromSelection();
 
 				if (!root.rotationQuaternion) root.rotationQuaternion = new BABYLON.Quaternion();
@@ -452,20 +357,14 @@ export class ObjectManager {
 				}
 
 				root.scaling.copyFrom(this.ghostMesh.scaling);
-
-				// Update matrix after transform change
 				root.computeWorldMatrix(true);
 			}
 
 			result.meshes.forEach(m => m.computeWorldMatrix(true));
 
 			if (useExplicit) {
-				// If explicit, we assume the Y is already correct (from ghost)
-				// However, ImportMeshAsync loads at 0,0,0 relative to pivot.
-				// Ghost position is the pivot position.
 				root.position = new BABYLON.Vector3(targetX, baseY, targetZ);
 			} else {
-				// Legacy calculation
 				const bounds = root.getHierarchyBoundingVectors();
 				const heightOffset = -bounds.min.y;
 				root.position = new BABYLON.Vector3(targetX, baseY + heightOffset + this.defaultYOffset, targetZ);
@@ -483,10 +382,10 @@ export class ObjectManager {
 			const objData = {
 				id: id,
 				name: uniqueName,
-				file: filename, // Stores "folder/file.glb"
+				file: filename,
 				type: 'mesh',
 				isLocked: false,
-				color: null, // Changed from '#ffffff' to prevent overwriting original colors on reload
+				color: null,
 				position: root.position.asArray(),
 				rotation: root.rotationQuaternion ? root.rotationQuaternion.toEulerAngles().asArray() : root.rotation.asArray(),
 				scaling: root.scaling.asArray()
@@ -494,8 +393,12 @@ export class ObjectManager {
 
 			this.placedObjects.push(objData);
 
-			// Select the new object
 			this.selectObject(root, false);
+
+			// NEW: If an anchor was active, move it to the newly created object
+			if (this.snapManager.anchorMesh) {
+				this.snapManager.setAnchor(root);
+			}
 
 			this.undoRedo.add({ type: 'ADD', data: [objData] });
 			if (this.onListChange) this.onListChange();
@@ -546,7 +449,7 @@ export class ObjectManager {
 					file: filename,
 					type: 'mesh',
 					isLocked: false,
-					color: null, // Changed from '#ffffff' to prevent overwriting original colors on reload
+					color: null,
 					position: mesh.position.asArray(),
 					rotation: mesh.rotationQuaternion ? mesh.rotationQuaternion.toEulerAngles().asArray() : mesh.rotation.asArray(),
 					scaling: mesh.scaling.asArray()
@@ -601,7 +504,7 @@ export class ObjectManager {
 			name: name,
 			type: 'light',
 			isLocked: false,
-			color: null, // Added for consistency
+			color: null,
 			position: light.position.asArray(),
 			rotation: [0, 0, 0],
 			scaling: [1, 1, 1]
@@ -613,10 +516,13 @@ export class ObjectManager {
 		if (this.onListChange) this.onListChange();
 	}
 
-	// --- Core Lifecycle & Selection ---
-
 	removeObjectById (id, clearSelection = true) {
+		// NEW: If deleting the anchor, clear it first
 		const mesh = this.findMeshById(id);
+		if (mesh && this.snapManager.anchorMesh === mesh) {
+			this.snapManager.clearAnchor();
+		}
+
 		if (mesh) {
 			if (clearSelection) {
 				this.selectedMeshes = this.selectedMeshes.filter(m => m !== mesh);
@@ -625,11 +531,9 @@ export class ObjectManager {
 			mesh.dispose();
 		}
 
-		// FIXED: Added null check 'o &&' to prevent crashes if placedObjects has holes
 		this.placedObjects = this.placedObjects.filter(o => o && o.id !== id);
 	}
 
-	// Modified to return a Promise so we can await completion during load
 	restoreObject (data) {
 		if (data.type === 'light') {
 			const light = new BABYLON.PointLight(data.name, BABYLON.Vector3.FromArray(data.position), this.scene);
@@ -646,7 +550,6 @@ export class ObjectManager {
 			if (this.onListChange) this.onListChange();
 			return Promise.resolve();
 		} else {
-			// Return the promise from ImportMeshAsync
 			return BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, data.file, this.scene).then(res => {
 				const root = res.meshes[0];
 				root.name = data.name;
@@ -719,8 +622,6 @@ export class ObjectManager {
 		}
 
 		this.updateSelectionProxy();
-
-		// NEW: Update ghost transform if we are in placement mode
 		this.updateGhostTransformFromSelection();
 
 		if (this.onSelectionChange) {
@@ -800,32 +701,25 @@ export class ObjectManager {
 		meshes.forEach(m => {
 			if (!m.material) return;
 
-			// Init Original Material Reference
-			// We store this on the mesh instance to allow reverting at runtime
 			if (!m.reservedOriginalMaterial) {
 				m.reservedOriginalMaterial = m.material;
 			}
 
 			if (hexColor === null) {
-				// RESET: Revert to original material if we have strayed
 				if (m.material !== m.reservedOriginalMaterial) {
 					const tintedMaterial = m.material;
 					m.material = m.reservedOriginalMaterial;
-					// Dispose the tinted clone to clean up
 					tintedMaterial.dispose();
 				}
 			} else {
-				// APPLY
 				const color = BABYLON.Color3.FromHexString(hexColor);
 
-				// If we are currently using the original material, we need to clone it first
 				if (m.material === m.reservedOriginalMaterial) {
 					const cloneName = m.material.name + '_tinted_' + root.metadata.id;
 					const newMat = m.material.clone(cloneName);
 					m.material = newMat;
 				}
 
-				// Apply Color to current material (which is now guaranteed to be the clone)
 				if (m.material instanceof BABYLON.PBRMaterial) {
 					m.material.albedoColor = color;
 				} else if (m.material instanceof BABYLON.StandardMaterial) {
@@ -834,8 +728,6 @@ export class ObjectManager {
 			}
 		});
 	}
-
-	// --- Persistence ---
 
 	getMapData (mapName) {
 		return {
@@ -846,8 +738,10 @@ export class ObjectManager {
 		};
 	}
 
-	// Modified to be async to support waiting for assets to load before selecting
 	async loadMapData (data) {
+		// Clear Anchor when loading new map
+		this.snapManager.clearAnchor();
+
 		[...this.scene.meshes].forEach(m => {
 			if (m.metadata && m.metadata.isObject) m.dispose();
 		});
@@ -864,11 +758,9 @@ export class ObjectManager {
 
 		this.selectObject(null, false);
 
-		// Initial clear update
 		if (this.onListChange) this.onListChange();
 
 		if (data.assets) {
-			// Wait for all assets to be restored
 			const promises = data.assets.map(item => this.restoreObject(item));
 			await Promise.all(promises);
 		}
@@ -883,7 +775,6 @@ export class ObjectManager {
 		const data = this.getMapData('autosave');
 		localStorage.setItem(LS_AUTOSAVE_KEY, JSON.stringify(data));
 
-		// Save Selection State
 		const selectedIds = this.selectedMeshes.map(m => m.metadata.id);
 		localStorage.setItem(LS_SELECTION_KEY, JSON.stringify(selectedIds));
 
@@ -898,7 +789,6 @@ export class ObjectManager {
 				console.log('Restoring auto-saved map...');
 				await this.loadMapData(data);
 
-				// Restore Selection State after map is fully loaded
 				const savedSelection = localStorage.getItem(LS_SELECTION_KEY);
 				if (savedSelection) {
 					try {
