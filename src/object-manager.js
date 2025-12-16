@@ -22,8 +22,12 @@ export class ObjectManager {
 		this.selectedMeshes = []; // Array of currently selected Babylon Meshes
 		this.selectionProxy = null; // TransformNode for multi-selection group transforms
 		
-		// NEW: Track the asset selected in the sidebar waiting to be placed
 		this.activeAssetFile = null;
+		
+		// Ghost State
+		this.ghostMesh = null;
+		this.ghostPosition = BABYLON.Vector3.Zero();
+		this.isGhostLoading = false;
 		
 		// Settings
 		this._gridSize = 2.5;
@@ -34,7 +38,7 @@ export class ObjectManager {
 		// Events
 		this.onSelectionChange = null; // Callback for UI
 		this.onListChange = null; // Callback for TreeView
-		this.onAssetSelectionChange = null; // NEW: Callback when sidebar asset is selected
+		this.onAssetSelectionChange = null;
 		
 		// Initialize Undo/Redo Manager
 		this.undoRedo = new UndoRedoManager(this);
@@ -80,10 +84,136 @@ export class ObjectManager {
 	
 	// --- NEW: Asset Selection Logic ---
 	setActiveAsset (file) {
-		this.activeAssetFile = file;
-		if (this.onAssetSelectionChange) {
-			this.onAssetSelectionChange(file);
+		// If clicking the same asset or null, clear it
+		if (this.activeAssetFile === file || file === null) {
+			this.activeAssetFile = null;
+			this.clearGhost();
+		} else {
+			this.activeAssetFile = file;
+			this.loadGhostAsset(file);
 		}
+		
+		if (this.onAssetSelectionChange) {
+			this.onAssetSelectionChange(this.activeAssetFile);
+		}
+	}
+	
+	// --- Ghost Logic ---
+	async loadGhostAsset (file) {
+		this.clearGhost();
+		this.isGhostLoading = true;
+		
+		try {
+			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, file, this.scene);
+			if (this.activeAssetFile !== file) {
+				// User switched assets while loading
+				result.meshes.forEach(m => m.dispose());
+				return;
+			}
+			
+			this.ghostMesh = result.meshes[0];
+			this.ghostMesh.name = "ghost_asset";
+			
+			// Normalize hierarchy
+			this.ghostMesh.computeWorldMatrix(true);
+			result.meshes.forEach(m => {
+				m.isPickable = false; // Raycast must pass through ghost
+				m.checkCollisions = false;
+				// Make semi-transparent
+				m.visibility = 0.5;
+				// Ensure it doesn't cast shadows
+				if (this.shadowGenerator) {
+					this.shadowGenerator.removeShadowCaster(m);
+				}
+				m.receiveShadows = false;
+				
+				// Tag as ghost for raycast filtering
+				if (!m.metadata) m.metadata = {};
+				m.metadata.isGhost = true;
+			});
+			
+			// Initial position off-screen until mouse move
+			this.ghostMesh.position = new BABYLON.Vector3(0, 1, 0);
+			this.isGhostLoading = false;
+		} catch (e) {
+			console.error("Failed to load ghost asset", e);
+			this.isGhostLoading = false;
+		}
+	}
+	
+	clearGhost () {
+		if (this.ghostMesh) {
+			this.ghostMesh.dispose(false, true);
+			this.ghostMesh = null;
+		}
+	}
+	
+	updateGhostPosition (pickInfo) {
+		if (!this.ghostMesh || this.isGhostLoading || !pickInfo.hit) return;
+		
+		let targetPos = pickInfo.pickedPoint.clone();
+		let isStacked = false;
+		
+		// 1. Stacking Logic: If we clicked an object, stack on top
+		if (pickInfo.pickedMesh && pickInfo.pickedMesh.name !== 'ground') {
+			let mesh = pickInfo.pickedMesh;
+			// Find root
+			while (mesh && (!mesh.metadata || !mesh.metadata.isObject) && mesh.parent) {
+				mesh = mesh.parent;
+			}
+			
+			if (mesh) {
+				mesh.computeWorldMatrix(true);
+				const bounds = mesh.getHierarchyBoundingVectors();
+				targetPos.y = bounds.max.y;
+				isStacked = true;
+			}
+		}
+		
+		// Calculate Ghost Bounds Dimensions (for offset and snapping)
+		this.ghostMesh.computeWorldMatrix(true);
+		const ghostBounds = this.ghostMesh.getHierarchyBoundingVectors();
+		const ghostHeight = ghostBounds.max.y - ghostBounds.min.y;
+		const ghostWidth = ghostBounds.max.x - ghostBounds.min.x;
+		const ghostDepth = ghostBounds.max.z - ghostBounds.min.z;
+		const ghostYOffset = -ghostBounds.min.y; // Pivot correction
+		
+		// Apply Y Offset
+		targetPos.y += ghostYOffset + this.defaultYOffset;
+		
+		// 2. Snapping Logic (Only if not stacking and we have selected meshes)
+		if (!isStacked && this.selectedMeshes.length > 0) {
+			const snapThreshold = 1.0; // Distance to trigger snap
+			
+			// We iterate through selected meshes to find the closest edge
+			for (const selectedMesh of this.selectedMeshes) {
+				const selBounds = selectedMesh.getHierarchyBoundingVectors();
+				
+				// X-Axis Snapping
+				// Snap Ghost Left to Selected Right
+				if (Math.abs((targetPos.x - ghostWidth / 2) - selBounds.max.x) < snapThreshold) {
+					targetPos.x = selBounds.max.x + ghostWidth / 2;
+				}
+				// Snap Ghost Right to Selected Left
+				else if (Math.abs((targetPos.x + ghostWidth / 2) - selBounds.min.x) < snapThreshold) {
+					targetPos.x = selBounds.min.x - ghostWidth / 2;
+				}
+				
+				// Z-Axis Snapping
+				// Snap Ghost Back to Selected Front
+				if (Math.abs((targetPos.z - ghostDepth / 2) - selBounds.max.z) < snapThreshold) {
+					targetPos.z = selBounds.max.z + ghostDepth / 2;
+				}
+				// Snap Ghost Front to Selected Back
+				else if (Math.abs((targetPos.z + ghostDepth / 2) - selBounds.min.z) < snapThreshold) {
+					targetPos.z = selBounds.min.z - ghostDepth / 2;
+				}
+			}
+		}
+		
+		// Update Ghost Position
+		this.ghostMesh.position = targetPos;
+		this.ghostPosition = targetPos; // Store for final placement
 	}
 	
 	// --- Nudge Logic (Arrow Keys) ---
@@ -142,20 +272,29 @@ export class ObjectManager {
 	// --- Asset Spawning (Core Responsibility) ---
 	
 	// filename now includes folder path e.g. "nature/rock.glb"
-	async addAsset (filename, position) {
+	// explicitPosition: Optional Vector3. If provided, skips calculation logic.
+	async addAsset (filename, explicitPosition = null) {
 		try {
-			let targetX = position.x;
-			let targetZ = position.z;
-			let baseY = position.y;
+			let targetX = 0;
+			let targetZ = 0;
+			let baseY = 0;
+			let useExplicit = false;
 			
-			// Only use selection-based centering if NOT in active placement mode
-			// OR if the position passed is generic (which shouldn't happen in placement mode)
-			if (!this.activeAssetFile && this.selectedMeshes.length === 1) {
-				const baseMesh = this.selectedMeshes[0];
-				const bounds = baseMesh.getHierarchyBoundingVectors();
-				targetX = (bounds.min.x + bounds.max.x) / 2;
-				targetZ = (bounds.min.z + bounds.max.z) / 2;
-				baseY = bounds.max.y;
+			if (explicitPosition) {
+				targetX = explicitPosition.x;
+				baseY = explicitPosition.y; // Explicit position usually includes Y offset already
+				targetZ = explicitPosition.z;
+				useExplicit = true;
+			} else {
+				// Fallback logic if no position provided (e.g. double click sidebar?)
+				// Only use selection-based centering if NOT in active placement mode
+				if (this.selectedMeshes.length === 1) {
+					const baseMesh = this.selectedMeshes[0];
+					const bounds = baseMesh.getHierarchyBoundingVectors();
+					targetX = (bounds.min.x + bounds.max.x) / 2;
+					targetZ = (bounds.min.z + bounds.max.z) / 2;
+					baseY = bounds.max.y;
+				}
 			}
 			
 			const id = BABYLON.Tools.RandomId();
@@ -183,14 +322,18 @@ export class ObjectManager {
 			root.computeWorldMatrix(true);
 			result.meshes.forEach(m => m.computeWorldMatrix(true));
 			
-			const bounds = root.getHierarchyBoundingVectors();
-			const heightOffset = -bounds.min.y;
-			
-			if (this.selectedMeshes.length === 1 && !this.activeAssetFile) {
+			if (useExplicit) {
+				// If explicit, we assume the Y is already correct (from ghost)
+				// However, ImportMeshAsync loads at 0,0,0 relative to pivot.
+				// Ghost position is the pivot position.
 				root.position = new BABYLON.Vector3(targetX, baseY, targetZ);
 			} else {
+				// Legacy calculation
+				const bounds = root.getHierarchyBoundingVectors();
+				const heightOffset = -bounds.min.y;
 				root.position = new BABYLON.Vector3(targetX, baseY + heightOffset + this.defaultYOffset, targetZ);
 			}
+			
 			root.metadata = { id: id, isObject: true, file: filename };
 			
 			result.meshes.forEach(m => {
@@ -213,6 +356,8 @@ export class ObjectManager {
 			};
 			
 			this.placedObjects.push(objData);
+			
+			// Select the new object
 			this.selectObject(root, false);
 			
 			this.undoRedo.add({ type: 'ADD', data: [objData] });

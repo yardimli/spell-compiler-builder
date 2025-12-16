@@ -288,7 +288,7 @@ export class BuilderScene {
 				e.preventDefault(); // Prevent browser menu focus
 			}
 			
-			// NEW: Arrow Key Nudge Logic
+			// Arrow Key Nudge Logic
 			if (this.objectManager.selectedMeshes.length > 0) {
 				// Ignore if user is typing in an input
 				if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
@@ -372,31 +372,12 @@ export class BuilderScene {
 		const isMultiSelect = info.event.shiftKey;
 		
 		if (pick.hit) {
-			// NEW: Check if we are in "Placement Mode" (an asset is selected in sidebar)
+			// Check if we are in "Placement Mode" (an asset is selected in sidebar)
 			if (this.objectManager.activeAssetFile) {
-				let targetPosition = pick.pickedPoint.clone();
+				// Use the Ghost Position calculated during PointerMove
+				const targetPosition = this.objectManager.ghostPosition.clone();
 				
-				// If we clicked on an existing object, we want to stack on top
-				if (pick.pickedMesh !== this.groundMesh) {
-					// Find the root object of what we clicked
-					let mesh = pick.pickedMesh;
-					while (mesh && (!mesh.metadata || !mesh.metadata.isObject) && mesh.parent) {
-						mesh = mesh.parent;
-					}
-					
-					// If it's a valid object, calculate top center for stacking
-					if (mesh) {
-						// Ensure world matrix is up to date
-						mesh.computeWorldMatrix(true);
-						mesh.getChildMeshes().forEach(m => m.computeWorldMatrix(true));
-						
-						const bounds = mesh.getHierarchyBoundingVectors();
-						// Use the X/Z from the pick, but Y from the top of the bounding box
-						targetPosition.y = bounds.max.y;
-					}
-				}
-				
-				// Place the asset
+				// Place the asset using the calculated ghost position
 				this.objectManager.addAsset(this.objectManager.activeAssetFile, targetPosition);
 				
 				// Stop processing (don't select the object underneath)
@@ -465,6 +446,26 @@ export class BuilderScene {
 				}
 			}
 			return;
+		}
+		
+		// 2. Ghost Asset Movement
+		if (this.objectManager.activeAssetFile) {
+			// Force a pick to ensure we get the ground even if the event pick was swallowed or blocked
+			// We filter out the ghost mesh explicitly to be safe
+			const pick = this.scene.pick(
+				this.scene.pointerX,
+				this.scene.pointerY,
+				(mesh) => {
+					// Must be pickable, enabled, and NOT a ghost
+					return mesh.isPickable &&
+						mesh.isEnabled() &&
+						(!mesh.metadata || !mesh.metadata.isGhost);
+				}
+			);
+			
+			if (pick.hit) {
+				this.objectManager.updateGhostPosition(pick);
+			}
 		}
 	}
 	
