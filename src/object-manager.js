@@ -148,6 +148,10 @@ export class ObjectManager {
 			// Initial position off-screen until mouse move
 			this.ghostMesh.position = new BABYLON.Vector3(0, -1000, 0);
 			this.isGhostLoading = false;
+			
+			// NEW: Update ghost transform based on current selection
+			this.updateGhostTransformFromSelection();
+			
 		} catch (e) {
 			console.error("Failed to load ghost asset", e);
 			this.isGhostLoading = false;
@@ -158,6 +162,49 @@ export class ObjectManager {
 		if (this.ghostMesh) {
 			this.ghostMesh.dispose(false, true);
 			this.ghostMesh = null;
+		}
+	}
+	
+	// NEW: Helper to sync ghost transform with selected object
+	updateGhostTransformFromSelection () {
+		if (!this.ghostMesh || !this.activeAssetFile) return;
+		
+		let shouldCopy = false;
+		let sourceMesh = null;
+		
+		// Only apply if exactly one object is selected
+		if (this.selectedMeshes.length === 1) {
+			const mesh = this.selectedMeshes[0];
+			// Check if metadata exists and file matches the active asset
+			if (mesh.metadata && mesh.metadata.isObject && mesh.metadata.file === this.activeAssetFile) {
+				shouldCopy = true;
+				sourceMesh = mesh;
+			}
+		}
+		
+		if (shouldCopy && sourceMesh) {
+			// Ensure ghost has rotationQuaternion
+			if (!this.ghostMesh.rotationQuaternion) {
+				this.ghostMesh.rotationQuaternion = new BABYLON.Quaternion();
+			}
+			
+			// Copy Rotation
+			if (sourceMesh.rotationQuaternion) {
+				this.ghostMesh.rotationQuaternion.copyFrom(sourceMesh.rotationQuaternion);
+			} else {
+				BABYLON.Quaternion.FromEulerVectorToRef(sourceMesh.rotation, this.ghostMesh.rotationQuaternion);
+			}
+			
+			// Copy Scaling
+			this.ghostMesh.scaling.copyFrom(sourceMesh.scaling);
+		} else {
+			// Reset to defaults if no match or multiple selection
+			if (this.ghostMesh.rotationQuaternion) {
+				this.ghostMesh.rotationQuaternion.copyFromFloats(0, 0, 0, 1);
+			} else {
+				this.ghostMesh.rotation.set(0, 0, 0);
+			}
+			this.ghostMesh.scaling.set(1, 1, 1);
 		}
 	}
 	
@@ -194,7 +241,6 @@ export class ObjectManager {
 			const snapThreshold = 2.0; // Distance to trigger snap
 			let bestSnap = null;
 			let minDistance = snapThreshold;
-			let bestSnapMesh = null; // Track the mesh we are snapping to
 			
 			// Ghost Points (World Space at targetPos)
 			// Ghost Local Bounds + targetPos
@@ -355,6 +401,26 @@ export class ObjectManager {
 			root.name = uniqueName;
 			
 			root.computeWorldMatrix(true);
+			
+			// NEW: Apply transform from ghost (which mirrors selection) if applicable
+			if (this.ghostMesh && this.activeAssetFile === filename) {
+				// Sync ghost first to ensure it matches current selection state
+				this.updateGhostTransformFromSelection();
+				
+				if (!root.rotationQuaternion) root.rotationQuaternion = new BABYLON.Quaternion();
+				
+				if (this.ghostMesh.rotationQuaternion) {
+					root.rotationQuaternion.copyFrom(this.ghostMesh.rotationQuaternion);
+				} else {
+					BABYLON.Quaternion.FromEulerVectorToRef(this.ghostMesh.rotation, root.rotationQuaternion);
+				}
+				
+				root.scaling.copyFrom(this.ghostMesh.scaling);
+				
+				// Update matrix after transform change
+				root.computeWorldMatrix(true);
+			}
+			
 			result.meshes.forEach(m => m.computeWorldMatrix(true));
 			
 			if (useExplicit) {
@@ -617,6 +683,9 @@ export class ObjectManager {
 		}
 		
 		this.updateSelectionProxy();
+		
+		// NEW: Update ghost transform if we are in placement mode
+		this.updateGhostTransformFromSelection();
 		
 		if (this.onSelectionChange) {
 			if (this.selectedMeshes.length > 0) {
