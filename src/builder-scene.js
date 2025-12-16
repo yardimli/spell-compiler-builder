@@ -51,7 +51,8 @@ export class BuilderScene {
 		// --- Camera Input Configuration ---
 		// Attach control immediately so scroll wheel works all the time
 		this.camera.attachControl(this.canvas, true);
-		
+		this.camera.inputs.remove(this.camera.inputs.attached.keyboard);
+
 		// 0 disables panning completely (Standard Input)
 		this.camera.panningSensibility = 0;
 		
