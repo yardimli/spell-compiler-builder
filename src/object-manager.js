@@ -149,7 +149,7 @@ export class ObjectManager {
 			this.ghostMesh.position = new BABYLON.Vector3(0, -1000, 0);
 			this.isGhostLoading = false;
 			
-			// NEW: Update ghost transform based on current selection
+			// NEW: Sync ghost transform with selected object if it matches
 			this.updateGhostTransformFromSelection();
 			
 		} catch (e) {
@@ -242,44 +242,76 @@ export class ObjectManager {
 			let bestSnap = null;
 			let minDistance = snapThreshold;
 			
-			// Ghost Points (World Space at targetPos)
-			// Ghost Local Bounds + targetPos
-			const gMinX = this.ghostBoundsLocal.min.x + targetPos.x;
-			const gMinZ = this.ghostBoundsLocal.min.z + targetPos.z;
-			const gMaxX = this.ghostBoundsLocal.max.x + targetPos.x;
-			const gMaxZ = this.ghostBoundsLocal.max.z + targetPos.z;
-			const gCenterX = (gMinX + gMaxX) / 2;
-			const gCenterZ = (gMinZ + gMaxZ) / 2;
+			// --- 1. Calculate Ghost Points (OBB) ---
+			// Construct local points from the cached local bounds
+			const lMin = this.ghostBoundsLocal.min;
+			const lMax = this.ghostBoundsLocal.max;
+			const lCenter = lMin.add(lMax).scale(0.5);
 			
-			const ghostPoints = [
-				{ x: gMinX, z: gMinZ }, { x: gCenterX, z: gMinZ }, { x: gMaxX, z: gMinZ },
-				{ x: gMinX, z: gCenterZ }, { x: gMaxX, z: gCenterZ },
-				{ x: gMinX, z: gMaxZ }, { x: gCenterX, z: gMaxZ }, { x: gMaxX, z: gMaxZ }
+			// 9 points on the bottom face (Y = lMin.y)
+			const localPoints = [
+				new BABYLON.Vector3(lMin.x, lMin.y, lMin.z),
+				new BABYLON.Vector3(lCenter.x, lMin.y, lMin.z),
+				new BABYLON.Vector3(lMax.x, lMin.y, lMin.z),
+				new BABYLON.Vector3(lMin.x, lMin.y, lCenter.z),
+				new BABYLON.Vector3(lCenter.x, lMin.y, lCenter.z),
+				new BABYLON.Vector3(lMax.x, lMin.y, lCenter.z),
+				new BABYLON.Vector3(lMin.x, lMin.y, lMax.z),
+				new BABYLON.Vector3(lCenter.x, lMin.y, lMax.z),
+				new BABYLON.Vector3(lMax.x, lMin.y, lMax.z)
 			];
 			
-			// We iterate through selected meshes to find the closest match
+			// Transform to World Space using Ghost's current transform + targetPos
+			const rotation = this.ghostMesh.rotationQuaternion || BABYLON.Quaternion.FromEulerVector(this.ghostMesh.rotation);
+			const scaling = this.ghostMesh.scaling;
+			const matrix = BABYLON.Matrix.Compose(scaling, rotation, targetPos);
+			
+			const ghostWorldPoints = localPoints.map(p => BABYLON.Vector3.TransformCoordinates(p, matrix));
+			
+			// --- 2. Calculate Target Points (OBB of parts) ---
 			for (const selectedMesh of this.selectedMeshes) {
-				const selBounds = selectedMesh.getHierarchyBoundingVectors();
-				const sMinX = selBounds.min.x;
-				const sMinZ = selBounds.min.z;
-				const sMaxX = selBounds.max.x;
-				const sMaxZ = selBounds.max.z;
-				const sCenterX = (sMinX + sMaxX) / 2;
-				const sCenterZ = (sMinZ + sMaxZ) / 2;
+				const targetWorldPoints = [];
 				
-				const selPoints = [
-					{ x: sMinX, z: sMinZ }, { x: sCenterX, z: sMinZ }, { x: sMaxX, z: sMinZ },
-					{ x: sMinX, z: sCenterZ }, { x: sMaxX, z: sCenterZ },
-					{ x: sMinX, z: sMaxZ }, { x: sCenterX, z: sMaxZ }, { x: sMaxX, z: sMaxZ }
-				];
+				// Get pickable meshes in hierarchy
+				const meshes = selectedMesh.getChildMeshes(false, (m) => m.isEnabled() && m.isVisible && m.isPickable);
+				if (selectedMesh.isPickable) meshes.push(selectedMesh);
 				
-				for (const gp of ghostPoints) {
-					for (const sp of selPoints) {
-						const dist = Math.sqrt(Math.pow(gp.x - sp.x, 2) + Math.pow(gp.z - sp.z, 2));
+				// Collect corners and midpoints from OBBs
+				meshes.forEach(m => {
+					const box = m.getBoundingInfo().boundingBox;
+					const v = box.vectorsWorld; // 8 corners
+					
+					// Add Corners
+					for (const p of v) targetWorldPoints.push(p);
+					
+					// Add Midpoints of edges (Bottom Face: 0-3, Top Face: 4-7)
+					// Bottom
+					targetWorldPoints.push(v[0].add(v[1]).scale(0.5));
+					targetWorldPoints.push(v[1].add(v[2]).scale(0.5));
+					targetWorldPoints.push(v[2].add(v[3]).scale(0.5));
+					targetWorldPoints.push(v[3].add(v[0]).scale(0.5));
+					// Top
+					targetWorldPoints.push(v[4].add(v[5]).scale(0.5));
+					targetWorldPoints.push(v[5].add(v[6]).scale(0.5));
+					targetWorldPoints.push(v[6].add(v[7]).scale(0.5));
+					targetWorldPoints.push(v[7].add(v[4]).scale(0.5));
+				});
+				
+				// Fallback if no geometry found
+				if (targetWorldPoints.length === 0) {
+					targetWorldPoints.push(selectedMesh.absolutePosition.clone());
+				}
+				
+				// Find closest match
+				for (const gp of ghostWorldPoints) {
+					for (const tp of targetWorldPoints) {
+						const dx = tp.x - gp.x;
+						const dz = tp.z - gp.z;
+						const dist = Math.sqrt(dx * dx + dz * dz);
+						
 						if (dist < minDistance) {
 							minDistance = dist;
-							// Vector needed to move Ghost to Target
-							bestSnap = { x: sp.x - gp.x, z: sp.z - gp.z, y : selectedMesh.absolutePosition.y };
+							bestSnap = { x: dx, z: dz };
 						}
 					}
 				}
@@ -288,7 +320,6 @@ export class ObjectManager {
 			if (bestSnap) {
 				targetPos.x += bestSnap.x;
 				targetPos.z += bestSnap.z;
-				targetPos.y = bestSnap.y;
 			}
 		}
 		
