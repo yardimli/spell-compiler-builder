@@ -10,7 +10,12 @@ export class SnapManager {
         this.anchorIndicator = null;
 
         // Settings
-        this.snapThreshold = 2.0;
+        this.snapThreshold = 0.25;
+
+        // Drag State for "Break Force" logic
+        this.isDragging = false;
+        this.rawPosition = null; // The theoretical position of the mesh without snapping
+        this.lastSnappedPosition = null; // The actual visual position of the mesh (snapped)
     }
 
     /**
@@ -29,7 +34,6 @@ export class SnapManager {
 
         // Create Visual Indicator (Blinking Ball)
         const bounds = mesh.getHierarchyBoundingVectors();
-        const height = bounds.max.y - bounds.min.y;
         const center = bounds.min.add(bounds.max).scale(0.5);
 
         // Position slightly above the object
@@ -174,32 +178,57 @@ export class SnapManager {
     }
 
     /**
+     * Initializes snapping state at the beginning of a drag operation.
+     * @param {BABYLON.Mesh|BABYLON.TransformNode} mesh
+     */
+    startSnapping (mesh) {
+        this.isDragging = true;
+        // Store the starting position (world)
+        this.rawPosition = mesh.absolutePosition.clone();
+        // Store where the mesh is visually right now (world)
+        this.lastSnappedPosition = mesh.absolutePosition.clone();
+    }
+
+    /**
+     * Cleans up snapping state at the end of a drag operation.
+     */
+    endSnapping () {
+        this.isDragging = false;
+        this.rawPosition = null;
+        this.lastSnappedPosition = null;
+    }
+
+    /**
      * Called by GizmoController when dragging existing objects.
+     * Uses accumulated delta logic to allow breaking free from snaps.
      * @param {BABYLON.Mesh} mesh - The mesh being dragged.
      */
     snapMesh (mesh) {
-        // Only snap if we have an anchor
-        if (!this.anchorMesh) return;
+        // Only snap if we have an anchor and are dragging
+        if (!this.anchorMesh || !this.isDragging || !this.rawPosition) return;
 
         // Don't snap to self
         if (mesh === this.anchorMesh) return;
 
-        // Prepare data for calculation
+        // 1. Calculate Gizmo Movement Delta
+        // The mesh has been moved by the gizmo since the last frame/snap
+        // We compare current visual position with where we left it last frame
         const currentPos = mesh.absolutePosition;
-        const bounds = mesh.getHierarchyBoundingVectors();
+        const moveDelta = currentPos.subtract(this.lastSnappedPosition);
 
-        // Calculate local bounds roughly (assuming pivot is somewhat central or bottom)
-        // Ideally we cache this like in ObjectManager, but for existing objects we calculate on fly
-        // We need local bounds relative to the pivot (position).
-        // Since we can't easily get "Local Bounds" from World Bounds without matrix math,
-        // we will approximate by using the world bounds relative to the current position.
+        // 2. Update Raw Position (The position without snapping)
+        this.rawPosition.addInPlace(moveDelta);
+
+        // 3. Calculate Snap based on Raw Position
+        // We want to snap if the RAW position is close to the anchor.
+        // We need local bounds relative to the current position to pass to calculateSnapOffset.
+        const bounds = mesh.getHierarchyBoundingVectors();
         const localMin = bounds.min.subtract(currentPos);
         const localMax = bounds.max.subtract(currentPos);
-
         const movingBoundsLocal = { min: localMin, max: localMax };
 
         const snapOffset = this.calculateSnapOffset(
-            currentPos,
+            this.rawPosition, // Use raw position for calculation
             movingBoundsLocal,
             mesh.rotationQuaternion || BABYLON.Quaternion.FromEulerVector(mesh.rotation),
             mesh.scaling,
@@ -207,9 +236,16 @@ export class SnapManager {
         );
 
         if (snapOffset) {
-            mesh.position.x += snapOffset.x;
-            mesh.position.y += snapOffset.y;
-            mesh.position.z += snapOffset.z;
+            // Snap Target Found
+            const targetPos = this.rawPosition.add(new BABYLON.Vector3(snapOffset.x, snapOffset.y, snapOffset.z));
+
+            // Apply Snap
+            mesh.setAbsolutePosition(targetPos);
+            this.lastSnappedPosition.copyFrom(targetPos);
+        } else {
+            // No Snap - Revert to Raw
+            mesh.setAbsolutePosition(this.rawPosition);
+            this.lastSnappedPosition.copyFrom(this.rawPosition);
         }
     }
 }

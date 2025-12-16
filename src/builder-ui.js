@@ -397,6 +397,7 @@ export class BuilderUI {
 		window.addEventListener('keydown', (e) => {
 			if (e.key === 'Escape') {
 				this.clearAllSelections();
+				this.manager.releaseAnchor(); // Release anchor on ESC
 			}
 
 			// NEW: Delete Key Logic

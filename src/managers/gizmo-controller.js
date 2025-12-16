@@ -48,6 +48,15 @@ export class GizmoController {
 					rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),
 					scaling: mesh.absoluteScaling.asArray()
 				}));
+
+				// NEW: Start Snapping Logic
+				if ((type === 'positionGizmo' || type === 'planeGizmo') && this.om.snapManager) {
+					if (this.om.selectedMeshes.length === 1) {
+						this.om.snapManager.startSnapping(this.om.selectedMeshes[0]);
+					} else if (this.om.selectionProxy) {
+						this.om.snapManager.startSnapping(this.om.selectionProxy);
+					}
+				}
 			});
 
 			// Snapping during drag (Position only)
@@ -67,6 +76,11 @@ export class GizmoController {
 
 			onDragEnd.add(() => {
 				if (!this.dragStartData) return;
+
+				// NEW: End Snapping Logic
+				if (this.om.snapManager) {
+					this.om.snapManager.endSnapping();
+				}
 
 				const changes = [];
 
@@ -133,7 +147,7 @@ export class GizmoController {
 		this.planeGizmo.updateGizmoRotationToMatchAttachedMesh = false; // Always world aligned
 
 		// Create Cube Mesh for the Gizmo handle
-		this.planeGizmoMesh = BABYLON.MeshBuilder.CreateBox("planeGizmoBox", { size: 0.025 }, this.gizmoManager.utilityLayer.utilityLayerScene);
+		this.planeGizmoMesh = BABYLON.MeshBuilder.CreateBox("planeGizmoBox", { size: 0.02 }, this.gizmoManager.utilityLayer.utilityLayerScene);
 		const mat = new BABYLON.StandardMaterial("planeGizmoMat", this.gizmoManager.utilityLayer.utilityLayerScene);
 		mat.diffuseColor = BABYLON.Color3.Yellow();
 		mat.emissiveColor = BABYLON.Color3.Yellow().scale(0.5);
