@@ -256,11 +256,15 @@ export class PropertyPanel {
 		if (this.btnDelete) this.btnDelete.disabled = !hasSelection;
 		
 		if (!hasSelection) {
-			this.panel.style.display = 'none';
+			// CHANGED: Use visibility hidden instead of display none to preserve split layout
+			this.panel.style.visibility = 'hidden';
 			this.currentObjectId = null;
 		} else if (dataArray.length === 1) {
 			// SINGLE SELECTION
-			this.panel.style.display = 'flex';
+			// CHANGED: Use visibility visible
+			this.panel.style.visibility = 'visible';
+			this.panel.style.display = 'flex'; // Ensure flex layout is active
+			
 			this.singleView.style.display = 'block';
 			this.multiView.style.display = 'none';
 			
@@ -296,7 +300,10 @@ export class PropertyPanel {
 			if (this.inputs.scale.z) this.inputs.scale.z.value = parseFloat(data.scaling[2]).toFixed(2);
 		} else {
 			// MULTI SELECTION
+			// CHANGED: Use visibility visible
+			this.panel.style.visibility = 'visible';
 			this.panel.style.display = 'flex';
+			
 			this.singleView.style.display = 'none';
 			this.multiView.style.display = 'block';
 			

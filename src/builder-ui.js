@@ -56,6 +56,9 @@ export class BuilderUI {
 		this.setupSaveModal();
 		this.setupContextMenu();
 		this.setupAutoSaveTimer();
+		
+		// NEW: Setup the sidebar splitter
+		this.setupSplitter();
 	}
 	
 	setupAssetBrowser () {
@@ -320,6 +323,46 @@ export class BuilderUI {
 		}
 	}
 	
+	// NEW: Setup Splitter Logic
+	setupSplitter () {
+		const splitter = document.getElementById('sidebar-splitter');
+		const propPanel = document.getElementById('properties-panel');
+		const rightSidebar = document.getElementById('right-sidebar');
+		
+		if (!splitter || !propPanel || !rightSidebar) return;
+		
+		let isDragging = false;
+		
+		splitter.addEventListener('mousedown', (e) => {
+			isDragging = true;
+			document.body.style.cursor = 'row-resize';
+			e.preventDefault();
+		});
+		
+		window.addEventListener('mousemove', (e) => {
+			if (!isDragging) return;
+			
+			const sidebarRect = rightSidebar.getBoundingClientRect();
+			const relativeY = e.clientY - sidebarRect.top;
+			
+			// Calculate percentage
+			let percentage = (relativeY / sidebarRect.height) * 100;
+			
+			// Constraints (min 10%, max 90%)
+			if (percentage < 10) percentage = 10;
+			if (percentage > 90) percentage = 90;
+			
+			propPanel.style.height = `${percentage}%`;
+		});
+		
+		window.addEventListener('mouseup', () => {
+			if (isDragging) {
+				isDragging = false;
+				document.body.style.cursor = '';
+			}
+		});
+	}
+	
 	setupControls () {
 		document.getElementById('btnResetCam').onclick = () => { this.scene.resetCamera(); };
 		document.getElementById('btnLoad').onclick = () => document.getElementById('fileInput').click();
@@ -354,6 +397,15 @@ export class BuilderUI {
 		window.addEventListener('keydown', (e) => {
 			if (e.key === 'Escape') {
 				this.clearAllSelections();
+			}
+			
+			// NEW: Delete Key Logic
+			if (e.key === 'Delete') {
+				// Prevent deletion if user is typing in an input field
+				const tag = e.target.tagName;
+				if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+				
+				this.manager.deleteSelected();
 			}
 		});
 		
