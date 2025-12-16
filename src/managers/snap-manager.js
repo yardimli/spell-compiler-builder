@@ -33,9 +33,9 @@ export class SnapManager {
         const center = bounds.min.add(bounds.max).scale(0.5);
 
         // Position slightly above the object
-        const indicatorPos = new BABYLON.Vector3(center.x, bounds.max.y + 1.0, center.z);
+        const indicatorPos = new BABYLON.Vector3(center.x, bounds.max.y + 0.5, center.z);
 
-        this.anchorIndicator = BABYLON.MeshBuilder.CreateSphere("anchorIndicator", { diameter: 0.8 }, this.scene);
+        this.anchorIndicator = BABYLON.MeshBuilder.CreateSphere("anchorIndicator", { diameter: 0.3 }, this.scene);
         this.anchorIndicator.position = indicatorPos;
         this.anchorIndicator.isPickable = false;
 
@@ -57,13 +57,13 @@ export class SnapManager {
 
         const keys = [
             { frame: 0, value: 0.2 },
-            { frame: 15, value: 1.0 },
-            { frame: 30, value: 0.2 }
+            { frame: 30, value: 1.0 },
+            { frame: 60, value: 0.2 }
         ];
 
         animation.setKeys(keys);
         this.anchorIndicator.animations.push(animation);
-        this.scene.beginAnimation(this.anchorIndicator, 0, 30, true);
+        this.scene.beginAnimation(this.anchorIndicator, 0, 60, true);
 
         // Parent indicator to mesh so it moves with it (if mesh is moved via gizmo)
         this.anchorIndicator.setParent(mesh);

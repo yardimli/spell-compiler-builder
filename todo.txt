@@ -6,6 +6,8 @@
 - when snapping calculate the rotation and scale for the snapping points of both target and ghost align, currently it still calculates the snapping points as if it hadnt been rotated or scaled so the new asset isnt aligning properly with the target
 - add shortcut so del key will delete assets same as the button
 - on the scene objects make the height of the property inspector and tree view start with 50% each, allow user user to change the height with a horizontal splitter, amke it so even if the property inspector is not showing the tree view should not change size.
+- change so every asset can be targeted for snapping to with every other asset with right click
+- allow from sidebar treeview to hide/unhide assets. hidden assets should not be rendered.
 
 #TODO 11
 - make light button open a dropdown with Pointlight, DirectionalLight, HemisphericLight
