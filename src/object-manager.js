@@ -194,6 +194,7 @@ export class ObjectManager {
 			const snapThreshold = 2.0; // Distance to trigger snap
 			let bestSnap = null;
 			let minDistance = snapThreshold;
+			let bestSnapMesh = null; // Track the mesh we are snapping to
 			
 			// Ghost Points (World Space at targetPos)
 			// Ghost Local Bounds + targetPos
@@ -206,7 +207,7 @@ export class ObjectManager {
 			
 			const ghostPoints = [
 				{ x: gMinX, z: gMinZ }, { x: gCenterX, z: gMinZ }, { x: gMaxX, z: gMinZ },
-				{ x: gMinX, z: gCenterZ },                         { x: gMaxX, z: gCenterZ },
+				{ x: gMinX, z: gCenterZ }, { x: gMaxX, z: gCenterZ },
 				{ x: gMinX, z: gMaxZ }, { x: gCenterX, z: gMaxZ }, { x: gMaxX, z: gMaxZ }
 			];
 			
@@ -222,7 +223,7 @@ export class ObjectManager {
 				
 				const selPoints = [
 					{ x: sMinX, z: sMinZ }, { x: sCenterX, z: sMinZ }, { x: sMaxX, z: sMinZ },
-					{ x: sMinX, z: sCenterZ },                         { x: sMaxX, z: sCenterZ },
+					{ x: sMinX, z: sCenterZ }, { x: sMaxX, z: sCenterZ },
 					{ x: sMinX, z: sMaxZ }, { x: sCenterX, z: sMaxZ }, { x: sMaxX, z: sMaxZ }
 				];
 				
@@ -232,7 +233,7 @@ export class ObjectManager {
 						if (dist < minDistance) {
 							minDistance = dist;
 							// Vector needed to move Ghost to Target
-							bestSnap = { x: sp.x - gp.x, z: sp.z - gp.z };
+							bestSnap = { x: sp.x - gp.x, z: sp.z - gp.z, y : selectedMesh.absolutePosition.y };
 						}
 					}
 				}
@@ -241,6 +242,7 @@ export class ObjectManager {
 			if (bestSnap) {
 				targetPos.x += bestSnap.x;
 				targetPos.z += bestSnap.z;
+				targetPos.y = bestSnap.y;
 			}
 		}
 		
