@@ -28,6 +28,8 @@ export class ObjectManager {
 		this.ghostMesh = null;
 		this.ghostPosition = BABYLON.Vector3.Zero();
 		this.isGhostLoading = false;
+		this.ghostOffset = 0; // Cached offset to align bottom to pivot
+		this.ghostBoundsLocal = null; // Cached local bounds for snapping
 		
 		// Settings
 		this._gridSize = 2.5;
@@ -132,8 +134,19 @@ export class ObjectManager {
 				m.metadata.isGhost = true;
 			});
 			
+			// Calculate Bounds Once (Fix for jumping bug)
+			// We calculate the offset required to bring the bottom of the mesh to the pivot point.
+			const bounds = this.ghostMesh.getHierarchyBoundingVectors();
+			this.ghostOffset = -bounds.min.y;
+			
+			// Store local bounds (assuming mesh is at 0,0,0 currently)
+			this.ghostBoundsLocal = {
+				min: bounds.min.clone(),
+				max: bounds.max.clone()
+			};
+			
 			// Initial position off-screen until mouse move
-			this.ghostMesh.position = new BABYLON.Vector3(0, 1, 0);
+			this.ghostMesh.position = new BABYLON.Vector3(0, -1000, 0);
 			this.isGhostLoading = false;
 		} catch (e) {
 			console.error("Failed to load ghost asset", e);
@@ -170,44 +183,64 @@ export class ObjectManager {
 			}
 		}
 		
-		// Calculate Ghost Bounds Dimensions (for offset and snapping)
-		this.ghostMesh.computeWorldMatrix(true);
-		const ghostBounds = this.ghostMesh.getHierarchyBoundingVectors();
-		const ghostHeight = ghostBounds.max.y - ghostBounds.min.y;
-		const ghostWidth = ghostBounds.max.x - ghostBounds.min.x;
-		const ghostDepth = ghostBounds.max.z - ghostBounds.min.z;
-		const ghostYOffset = -ghostBounds.min.y; // Pivot correction
+		// Apply Y Offset (Fix for jumping bug: use cached offset instead of recalculating from world bounds)
+		targetPos.y += this.ghostOffset;
+		if (!isStacked) {
+			targetPos.y += this.defaultYOffset;
+		}
 		
-		// Apply Y Offset
-		targetPos.y += ghostYOffset + this.defaultYOffset;
-		
-		// 2. Snapping Logic (Only if not stacking and we have selected meshes)
-		if (!isStacked && this.selectedMeshes.length > 0) {
-			const snapThreshold = 1.0; // Distance to trigger snap
+		// 2. Snapping Logic (Only if we have selected meshes)
+		if (this.selectedMeshes.length > 0 && this.ghostBoundsLocal) {
+			const snapThreshold = 2.0; // Distance to trigger snap
+			let bestSnap = null;
+			let minDistance = snapThreshold;
 			
-			// We iterate through selected meshes to find the closest edge
+			// Ghost Points (World Space at targetPos)
+			// Ghost Local Bounds + targetPos
+			const gMinX = this.ghostBoundsLocal.min.x + targetPos.x;
+			const gMinZ = this.ghostBoundsLocal.min.z + targetPos.z;
+			const gMaxX = this.ghostBoundsLocal.max.x + targetPos.x;
+			const gMaxZ = this.ghostBoundsLocal.max.z + targetPos.z;
+			const gCenterX = (gMinX + gMaxX) / 2;
+			const gCenterZ = (gMinZ + gMaxZ) / 2;
+			
+			const ghostPoints = [
+				{ x: gMinX, z: gMinZ }, { x: gCenterX, z: gMinZ }, { x: gMaxX, z: gMinZ },
+				{ x: gMinX, z: gCenterZ },                         { x: gMaxX, z: gCenterZ },
+				{ x: gMinX, z: gMaxZ }, { x: gCenterX, z: gMaxZ }, { x: gMaxX, z: gMaxZ }
+			];
+			
+			// We iterate through selected meshes to find the closest match
 			for (const selectedMesh of this.selectedMeshes) {
 				const selBounds = selectedMesh.getHierarchyBoundingVectors();
+				const sMinX = selBounds.min.x;
+				const sMinZ = selBounds.min.z;
+				const sMaxX = selBounds.max.x;
+				const sMaxZ = selBounds.max.z;
+				const sCenterX = (sMinX + sMaxX) / 2;
+				const sCenterZ = (sMinZ + sMaxZ) / 2;
 				
-				// X-Axis Snapping
-				// Snap Ghost Left to Selected Right
-				if (Math.abs((targetPos.x - ghostWidth / 2) - selBounds.max.x) < snapThreshold) {
-					targetPos.x = selBounds.max.x + ghostWidth / 2;
-				}
-				// Snap Ghost Right to Selected Left
-				else if (Math.abs((targetPos.x + ghostWidth / 2) - selBounds.min.x) < snapThreshold) {
-					targetPos.x = selBounds.min.x - ghostWidth / 2;
-				}
+				const selPoints = [
+					{ x: sMinX, z: sMinZ }, { x: sCenterX, z: sMinZ }, { x: sMaxX, z: sMinZ },
+					{ x: sMinX, z: sCenterZ },                         { x: sMaxX, z: sCenterZ },
+					{ x: sMinX, z: sMaxZ }, { x: sCenterX, z: sMaxZ }, { x: sMaxX, z: sMaxZ }
+				];
 				
-				// Z-Axis Snapping
-				// Snap Ghost Back to Selected Front
-				if (Math.abs((targetPos.z - ghostDepth / 2) - selBounds.max.z) < snapThreshold) {
-					targetPos.z = selBounds.max.z + ghostDepth / 2;
+				for (const gp of ghostPoints) {
+					for (const sp of selPoints) {
+						const dist = Math.sqrt(Math.pow(gp.x - sp.x, 2) + Math.pow(gp.z - sp.z, 2));
+						if (dist < minDistance) {
+							minDistance = dist;
+							// Vector needed to move Ghost to Target
+							bestSnap = { x: sp.x - gp.x, z: sp.z - gp.z };
+						}
+					}
 				}
-				// Snap Ghost Front to Selected Back
-				else if (Math.abs((targetPos.z + ghostDepth / 2) - selBounds.min.z) < snapThreshold) {
-					targetPos.z = selBounds.min.z - ghostDepth / 2;
-				}
+			}
+			
+			if (bestSnap) {
+				targetPos.x += bestSnap.x;
+				targetPos.z += bestSnap.z;
 			}
 		}
 		
