@@ -497,6 +497,14 @@ body, html {
     flex-shrink: 0;
 }
 
+#status-coords {
+    font-family: 'Consolas', 'Monaco', monospace;
+    color: #bdc3c7;
+    flex: 1;
+    text-align: center;
+    pointer-events: none;
+}
+
 #auto-save-container {
     display: flex;
     align-items: center;

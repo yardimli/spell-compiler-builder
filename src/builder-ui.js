@@ -1,3 +1,4 @@
+import * as BABYLON from '@babylonjs/core';
 import { PropertyPanel } from './property-panel';
 import { TreeView } from './tree-view';
 import { loadAssets, getAvailableFolders } from './loader';
@@ -61,6 +62,32 @@ export class BuilderUI {
 		this.setupContextMenu();
 		this.setupAutoSaveTimer();
 		this.setupSplitter();
+		this.setupStatusCoordinates();
+	}
+	
+	setupStatusCoordinates () {
+		const coordsEl = document.getElementById('status-coords');
+		if (!coordsEl) return;
+		
+		this.scene.scene.onPointerObservable.add((pointerInfo) => {
+			if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERMOVE) {
+				const ray = this.scene.scene.createPickingRay(
+					this.scene.scene.pointerX,
+					this.scene.scene.pointerY,
+					BABYLON.Matrix.Identity(),
+					this.scene.camera
+				);
+				
+				// Ground plane at y=0
+				const plane = BABYLON.Plane.FromPositionAndNormal(BABYLON.Vector3.Zero(), BABYLON.Vector3.Up());
+				const distance = ray.intersectsPlane(plane);
+				
+				if (distance !== null && distance !== undefined) {
+					const hit = ray.origin.add(ray.direction.scale(distance));
+					coordsEl.innerText = `X: ${hit.x.toFixed(2)}  Y: ${hit.y.toFixed(2)}  Z: ${hit.z.toFixed(2)}`;
+				}
+			}
+		});
 	}
 	
 	setupAssetBrowser () {
