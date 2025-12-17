@@ -61,9 +61,6 @@ export class BuilderScene {
 		this.camera.angularSensibilityY = Infinity;
 		
 		// 4. Lights
-		const hemiLight = new BABYLON.HemisphericLight('hemiLight', new BABYLON.Vector3(0, 1, 0), this.scene);
-		hemiLight.intensity = 0.6; // Slightly reduced ambient to make shadows pop more
-		
 		const dirLight = new BABYLON.DirectionalLight('dirLight', new BABYLON.Vector3(-1, -2, -1), this.scene);
 		dirLight.position = new BABYLON.Vector3(20, 40, 20);
 		dirLight.intensity = 1.0;
