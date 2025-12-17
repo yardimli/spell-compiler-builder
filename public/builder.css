@@ -155,6 +155,47 @@ body, html {
     box-shadow: 2px 2px 8px rgba(0,0,0,0.3);
 }
 
+/* Section Headers within Sidebar */
+.sidebar-section-header {
+    padding: 8px 15px;
+    background: #1a252f;
+    font-weight: bold;
+    font-size: 12px;
+    color: #f1c40f;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    flex-shrink: 0;
+}
+
+/* Scrollable Areas */
+.sidebar-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: #233342;
+    min-height: 0; /* Important for flex nesting */
+}
+
+/* Specific ID overrides to remove old flex:1 if needed, but class handles it */
+#asset-store-list {
+    border-bottom: 1px solid #1a252f;
+}
+
+#asset-list {
+    /* Inherits .sidebar-scroll-area */
+}
+
+.empty-state {
+    padding: 20px;
+    text-align: center;
+    color: #7f8c8d;
+    font-style: italic;
+    font-size: 12px;
+}
+
+
 #left-sidebar.collapsed {
     height: 40px;
 }

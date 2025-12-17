@@ -2,6 +2,8 @@
 
 #TODO 12
 - add asset store, remove tint from assets
+
+
 - create a new file to manage cameras called camera-manager.js, move existing camera code there.
 - allow adding multiple cameras to the scene, allow user to drag, rotate the camera, in properties add fov settings for cameras besides position, direction and rotation.
 - allow user to view scene from different cameras using a dropdown in the top menubar

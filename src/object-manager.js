@@ -7,53 +7,49 @@ import { PropertyManager } from './managers/property-manager';
 import { OperationManager } from './managers/operation-manager';
 import { SnapManager } from './managers/snap-manager';
 import { LightManager } from './managers/light-manager';
+import { AssetManager } from './managers/asset-manager'; // Import AssetManager
 
-// Updated root path for assets
-const ASSET_ROOT = './assets/objects/';
 const LS_AUTOSAVE_KEY = 'builder_autosave_map';
 const LS_SELECTION_KEY = 'builder_selection_state';
 
 export class ObjectManager {
 	constructor (builderScene) {
-		// Accept builderScene to access scene and shadowGenerator dynamically
 		this.builderScene = builderScene;
 		this.scene = builderScene.scene;
 		
 		// State
-		this.placedObjects = []; // Array of metadata objects
-		this.groups = []; // Array of { id, name, objectIds: [] }
-		this.selectedMeshes = []; // Array of currently selected Babylon Meshes
-		this.selectionProxy = null; // TransformNode for multi-selection group transforms
+		this.placedObjects = [];
+		this.groups = [];
+		this.selectedMeshes = [];
+		this.selectionProxy = null;
 		
-		this.activeAssetFile = null;
+		// This now refers to the Asset Name in the store, not the file path
+		this.activeAssetName = null;
 		
 		// Ghost State
 		this.ghostMesh = null;
 		this.ghostPosition = BABYLON.Vector3.Zero();
-		this.isGhostLoading = false;
-		this.ghostOffset = 0; // Cached offset to align bottom to pivot
-		this.ghostBoundsLocal = null; // Cached local bounds for snapping
+		this.ghostOffset = 0;
+		this.ghostBoundsLocal = null;
 		
 		// Settings
 		this._gridSize = 2.5;
 		this.defaultYOffset = 0;
 		this.autoSaveEnabled = true;
-		this.cursorIncrement = 0.05; // Default increment for arrow key movement
+		this.cursorIncrement = 0.05;
 		
-		// Precision Step Settings
 		this.posStep = 0.1;
 		this.rotStep = 15;
 		this.scaleStep = 0.1;
 		
 		// Events
-		this.onSelectionChange = null; // Callback for UI
-		this.onListChange = null; // Callback for TreeView
+		this.onSelectionChange = null;
+		this.onListChange = null;
 		this.onAssetSelectionChange = null;
+		this.onStoreChange = null; // New event for store updates
 		
-		// Initialize Undo/Redo Manager
+		// Managers
 		this.undoRedo = new UndoRedoManager(this);
-		
-		// Initialize Sub-Managers
 		this.gizmoController = new GizmoController(this);
 		this.groupManager = new GroupManager(this);
 		this.alignmentManager = new AlignmentManager(this);
@@ -61,6 +57,9 @@ export class ObjectManager {
 		this.operationManager = new OperationManager(this);
 		this.snapManager = new SnapManager(this);
 		this.lightManager = new LightManager(this);
+		
+		// Initialize Asset Manager
+		this.assetManager = new AssetManager(this.scene);
 	}
 	
 	get gridSize () { return this._gridSize; }
@@ -69,28 +68,20 @@ export class ObjectManager {
 		this.gizmoController.updateGizmoSettings();
 	}
 	
-	// --- Gizmo Delegation ---
+	// Delegate methods...
 	get gizmoManager () { return this.gizmoController.gizmoManager; }
 	setGizmoMode (mode) { this.gizmoController.setMode(mode); }
 	updateGizmoSettings () { this.gizmoController.updateGizmoSettings(); }
-	
-	// --- Group Delegation ---
 	createGroup (name, objectIds) { this.groupManager.createGroup(name, objectIds); }
 	deleteGroup (groupId) { this.groupManager.deleteGroup(groupId); }
 	renameGroup (groupId, newName) { this.groupManager.renameGroup(groupId, newName); }
 	getGroupOfObject (objectId) { return this.groupManager.getGroupOfObject(objectId); }
-	
-	// --- Alignment Delegation ---
 	alignSelection (axis, mode) { this.alignmentManager.alignSelection(axis, mode); }
 	snapSelection (axis, margin) { this.alignmentManager.snapSelection(axis, margin); }
-	
-	// --- Property Delegation ---
 	updateObjectProperty (id, prop, value) { this.propertyManager.updateObjectProperty(id, prop, value); }
 	updateMultipleObjectsProperty (prop, value) { this.propertyManager.updateMultipleObjectsProperty(prop, value); }
 	updateGroupTransform (prop, values) { this.propertyManager.updateGroupTransform(prop, values); }
 	updateObjectTransform (id, data) { this.propertyManager.updateObjectTransform(id, data); }
-	
-	// Visibility Delegation
 	toggleObjectVisibility (id) {
 		const obj = this.placedObjects.find(o => o.id === id);
 		if (obj) {
@@ -98,91 +89,78 @@ export class ObjectManager {
 			this.propertyManager.updateVisibility(id, newState);
 		}
 	}
-	
 	toggleGroupVisibility (groupId) {
 		const group = this.groups.find(g => g.id === groupId);
 		if (group) {
-			// Check if any in group are visible
 			const anyVisible = group.objectIds.some(id => {
 				const obj = this.placedObjects.find(o => o.id === id);
 				return obj && (obj.isVisible !== false);
 			});
-			
-			// If any are visible, hide all. If all hidden, show all.
-			const targetState = !anyVisible;
-			
-			// Use batch update to create single undo entry
-			this.propertyManager.updateVisibilityBatch(group.objectIds, targetState);
+			this.propertyManager.updateVisibilityBatch(group.objectIds, !anyVisible);
 		}
 	}
-	
-	// --- Operation Delegation ---
 	deleteSelected () { this.operationManager.deleteSelected(); }
 	duplicateSelection () { this.operationManager.duplicateSelection(); }
-	
-	// --- Snap Delegation ---
 	setAnchor (mesh) { this.snapManager.setAnchor(mesh); }
 	releaseAnchor () { this.snapManager.clearAnchor(); }
 	
-	// --- Asset Selection Logic ---
-	setActiveAsset (file) {
-		if (this.activeAssetFile === file || file === null) {
-			this.activeAssetFile = null;
+	// --- Asset Store Logic ---
+	
+	async addAssetToStore (name, file, thumbnail) {
+		await this.assetManager.addToStore(name, file, thumbnail);
+		if (this.onStoreChange) this.onStoreChange();
+	}
+	
+	setActiveAsset (assetName) {
+		if (this.activeAssetName === assetName || assetName === null) {
+			this.activeAssetName = null;
 			this.clearGhost();
 		} else {
-			this.activeAssetFile = file;
-			this.loadGhostAsset(file);
+			this.activeAssetName = assetName;
+			this.loadGhostAsset(assetName);
 		}
 		
 		if (this.onAssetSelectionChange) {
-			this.onAssetSelectionChange(this.activeAssetFile);
+			this.onAssetSelectionChange(this.activeAssetName);
 		}
 	}
 	
-	// --- Ghost Logic ---
-	async loadGhostAsset (file) {
+	// --- Ghost Logic (Updated to use AssetManager) ---
+	loadGhostAsset (assetName) {
 		this.clearGhost();
-		this.isGhostLoading = true;
 		
-		try {
-			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, file, this.scene);
-			if (this.activeAssetFile !== file) {
-				result.meshes.forEach(m => m.dispose());
-				return;
-			}
-			
-			this.ghostMesh = result.meshes[0];
-			this.ghostMesh.name = "ghost_asset";
-			
-			this.ghostMesh.computeWorldMatrix(true);
-			result.meshes.forEach(m => {
-				m.isPickable = false;
-				m.checkCollisions = false;
-				m.visibility = 0.5;
-				// Remove from any shadow generators if automatically added (unlikely but safe)
-				this.builderScene.unregisterShadowCaster(m);
-				m.receiveShadows = false;
-				if (!m.metadata) m.metadata = {};
-				m.metadata.isGhost = true;
-			});
-			
-			const bounds = this.ghostMesh.getHierarchyBoundingVectors();
-			this.ghostOffset = -bounds.min.y;
-			
-			this.ghostBoundsLocal = {
-				min: bounds.min.clone(),
-				max: bounds.max.clone()
-			};
-			
-			this.ghostMesh.position = new BABYLON.Vector3(0, -1000, 0);
-			this.isGhostLoading = false;
-			
-			this.updateGhostTransformFromSelection();
-			
-		} catch (e) {
-			console.error("Failed to load ghost asset", e);
-			this.isGhostLoading = false;
-		}
+		// Get template from store
+		const newRoot = this.assetManager.instantiate(assetName);
+		if (!newRoot) return;
+		
+		this.ghostMesh = newRoot;
+		this.ghostMesh.name = "ghost_asset";
+		
+		// Configure ghost appearance
+		this.ghostMesh.computeWorldMatrix(true);
+		const descendants = this.ghostMesh.getChildMeshes(false);
+		descendants.push(this.ghostMesh);
+		
+		descendants.forEach(m => {
+			m.isPickable = false;
+			m.checkCollisions = false;
+			m.visibility = 0.5;
+			m.receiveShadows = false;
+			if (!m.metadata) m.metadata = {};
+			m.metadata.isGhost = true;
+		});
+		
+		const bounds = this.ghostMesh.getHierarchyBoundingVectors();
+		this.ghostOffset = -bounds.min.y;
+		
+		this.ghostBoundsLocal = {
+			min: bounds.min.clone(),
+			max: bounds.max.clone()
+		};
+		
+		this.ghostMesh.position = new BABYLON.Vector3(0, -1000, 0);
+		
+		this.updateGhostTransformFromSelection();
 	}
 	
 	clearGhost () {
@@ -193,14 +171,16 @@ export class ObjectManager {
 	}
 	
 	updateGhostTransformFromSelection () {
-		if (!this.ghostMesh || !this.activeAssetFile) return;
+		if (!this.ghostMesh || !this.activeAssetName) return;
 		
 		let shouldCopy = false;
 		let sourceMesh = null;
 		
 		if (this.selectedMeshes.length === 1) {
 			const mesh = this.selectedMeshes[0];
-			if (mesh.metadata && mesh.metadata.isObject && mesh.metadata.file === this.activeAssetFile) {
+			// Check if selected object matches current asset name
+			const objData = this.placedObjects.find(o => o.id === mesh.metadata.id);
+			if (objData && objData.assetName === this.activeAssetName) {
 				shouldCopy = true;
 				sourceMesh = mesh;
 			}
@@ -226,14 +206,12 @@ export class ObjectManager {
 		}
 	}
 	
-	// Uses SnapManager
 	updateGhostPosition (pickInfo) {
-		if (!this.ghostMesh || this.isGhostLoading || !pickInfo.hit) return;
+		if (!this.ghostMesh || !pickInfo.hit) return;
 		
 		let targetPos = pickInfo.pickedPoint.clone();
 		let isStacked = false;
 		
-		// 1. Stacking Logic
 		if (pickInfo.pickedMesh && pickInfo.pickedMesh.name !== 'ground') {
 			let mesh = pickInfo.pickedMesh;
 			while (mesh && (!mesh.metadata || !mesh.metadata.isObject) && mesh.parent) {
@@ -253,8 +231,6 @@ export class ObjectManager {
 			targetPos.y += this.defaultYOffset;
 		}
 		
-		// 2. Snapping Logic (Delegated to SnapManager)
-		// Determine targets: Anchor takes priority, otherwise selected meshes
 		let snapTargets = [];
 		if (this.snapManager.anchorMesh) {
 			snapTargets = [this.snapManager.anchorMesh];
@@ -334,8 +310,13 @@ export class ObjectManager {
 		}
 	}
 	
-	async addAsset (filename, explicitPosition = null) {
+	// --- Add Asset (Modified to use Store) ---
+	async addAsset (assetName, explicitPosition = null) {
 		try {
+			// Instantiate from store
+			const root = this.assetManager.instantiate(assetName);
+			if (!root) return;
+			
 			let targetX = 0;
 			let targetZ = 0;
 			let baseY = 0;
@@ -357,8 +338,7 @@ export class ObjectManager {
 			}
 			
 			const id = BABYLON.Tools.RandomId();
-			const baseName = filename.split('/').pop().replace(/\.glb$/i, '');
-			const existing = this.placedObjects.filter(o => o.name && o.name.startsWith(baseName));
+			const existing = this.placedObjects.filter(o => o.name && o.name.startsWith(assetName));
 			
 			let maxIndex = 0;
 			existing.forEach(o => {
@@ -369,18 +349,14 @@ export class ObjectManager {
 				}
 			});
 			
-			const uniqueName = `${baseName}_${maxIndex + 1}`;
-			
-			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, filename, this.scene);
-			const root = result.meshes[0];
-			
+			const uniqueName = `${assetName}_${maxIndex + 1}`;
 			root.name = uniqueName;
 			
 			root.computeWorldMatrix(true);
 			
-			if (this.ghostMesh && this.activeAssetFile === filename) {
+			// Copy transforms from ghost if active
+			if (this.ghostMesh && this.activeAssetName === assetName) {
 				this.updateGhostTransformFromSelection();
-				
 				if (!root.rotationQuaternion) root.rotationQuaternion = new BABYLON.Quaternion();
 				
 				if (this.ghostMesh.rotationQuaternion) {
@@ -388,12 +364,9 @@ export class ObjectManager {
 				} else {
 					BABYLON.Quaternion.FromEulerVectorToRef(this.ghostMesh.rotation, root.rotationQuaternion);
 				}
-				
 				root.scaling.copyFrom(this.ghostMesh.scaling);
 				root.computeWorldMatrix(true);
 			}
-			
-			result.meshes.forEach(m => m.computeWorldMatrix(true));
 			
 			if (useExplicit) {
 				root.position = new BABYLON.Vector3(targetX, baseY, targetZ);
@@ -403,12 +376,14 @@ export class ObjectManager {
 				root.position = new BABYLON.Vector3(targetX, baseY + heightOffset + this.defaultYOffset, targetZ);
 			}
 			
-			root.metadata = { id: id, isObject: true, file: filename };
+			// Metadata now references assetName instead of file
+			root.metadata = { id: id, isObject: true, assetName: assetName };
 			
-			result.meshes.forEach(m => {
-				// Register with all active shadow generators
+			const descendants = root.getChildMeshes(false);
+			descendants.push(root);
+			
+			descendants.forEach(m => {
 				this.builderScene.registerShadowCaster(m);
-				
 				m.receiveShadows = true;
 				m.isPickable = true;
 				if (m !== root) m.parent = root;
@@ -417,7 +392,7 @@ export class ObjectManager {
 			const objData = {
 				id: id,
 				name: uniqueName,
-				file: filename,
+				assetName: assetName, // Reference to store
 				type: 'mesh',
 				isLocked: false,
 				color: null,
@@ -427,10 +402,8 @@ export class ObjectManager {
 			};
 			
 			this.placedObjects.push(objData);
-			
 			this.selectObject(root, false);
 			
-			// If an anchor was active, move it to the newly created object
 			if (this.snapManager.anchorMesh) {
 				this.snapManager.setAnchor(root);
 			}
@@ -442,10 +415,11 @@ export class ObjectManager {
 		}
 	}
 	
-	async addAssetGrid (filename, position, rows, cols) {
+	// --- Add Grid (Modified to use Store) ---
+	async addAssetGrid (assetName, position, rows, cols) {
 		try {
-			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, filename, this.scene);
-			const root = result.meshes[0];
+			const root = this.assetManager.instantiate(assetName);
+			if (!root) return;
 			
 			const bounds = root.getHierarchyBoundingVectors();
 			const width = bounds.max.x - bounds.min.x;
@@ -453,15 +427,13 @@ export class ObjectManager {
 			const heightOffset = -bounds.min.y;
 			
 			const addedObjectsData = [];
-			const baseName = filename.split('/').pop().replace(/\.glb$/i, '');
-			
 			const startX = position.x - (width * cols) / 2 + width / 2;
 			const startZ = position.z - (depth * rows) / 2 + depth / 2;
 			
 			const setupMesh = (mesh, r, c) => {
 				const id = BABYLON.Tools.RandomId();
-				const existingCount = this.placedObjects.filter(o => o.name && o.name.startsWith(baseName)).length + addedObjectsData.length;
-				const uniqueName = `${baseName}_${existingCount + 1}`;
+				const existingCount = this.placedObjects.filter(o => o.name && o.name.startsWith(assetName)).length + addedObjectsData.length;
+				const uniqueName = `${assetName}_${existingCount + 1}`;
 				
 				mesh.name = uniqueName;
 				mesh.position = new BABYLON.Vector3(
@@ -470,12 +442,13 @@ export class ObjectManager {
 					startZ + r * depth
 				);
 				
-				mesh.metadata = { id: id, isObject: true, file: filename };
+				mesh.metadata = { id: id, isObject: true, assetName: assetName };
 				
-				mesh.getChildMeshes(false).forEach(m => {
-					// Register with all active shadow generators
+				const descendants = mesh.getChildMeshes(false);
+				if (mesh instanceof BABYLON.Mesh) descendants.push(mesh);
+				
+				descendants.forEach(m => {
 					this.builderScene.registerShadowCaster(m);
-					
 					m.receiveShadows = true;
 					m.isPickable = true;
 				});
@@ -483,10 +456,10 @@ export class ObjectManager {
 				const objData = {
 					id: id,
 					name: uniqueName,
-					file: filename,
+					assetName: assetName,
 					type: 'mesh',
 					isLocked: false,
-					isVisible: true, // NEW
+					isVisible: true,
 					color: null,
 					position: mesh.position.asArray(),
 					rotation: mesh.rotationQuaternion ? mesh.rotationQuaternion.toEulerAngles().asArray() : mesh.rotation.asArray(),
@@ -503,7 +476,11 @@ export class ObjectManager {
 			for (let r = 0; r < rows; r++) {
 				for (let c = 0; c < cols; c++) {
 					if (r === 0 && c === 0) continue;
-					const clone = root.clone();
+					// Use instantiate for clones too to ensure clean state, or clone the root
+					const clone = root.instantiateHierarchy();
+					// Reset transforms on clone before positioning
+					clone.rotation = BABYLON.Vector3.Zero();
+					clone.scaling = BABYLON.Vector3.One();
 					setupMesh(clone, r, c);
 				}
 			}
@@ -521,17 +498,14 @@ export class ObjectManager {
 		}
 	}
 	
-	// Modified to accept type
 	addLight (type = 'point', position = null) {
 		const pos = position || this.builderScene.selectedCellPosition || new BABYLON.Vector3(0, 5, 0);
 		const id = BABYLON.Tools.RandomId();
 		const existingLights = this.placedObjects.filter(o => o.type === 'light');
 		const name = `Light_${type}_${existingLights.length + 1}`;
 		
-		// Delegate to LightManager
 		const { mesh, light } = this.lightManager.createLight(type, new BABYLON.Vector3(pos.x, pos.y + 5, pos.z), name);
 		
-		// Add Metadata
 		mesh.metadata = { id: id, isObject: true, type: 'light', kind: type };
 		
 		const objData = {
@@ -541,8 +515,8 @@ export class ObjectManager {
 			kind: type,
 			isLocked: false,
 			isVisible: true,
-			color: light.diffuse.toHexString(), // Diffuse
-			specularColor: light.specular.toHexString(), // Specular
+			color: light.diffuse.toHexString(),
+			specularColor: light.specular.toHexString(),
 			groundColor: (type === 'hemispheric') ? light.groundColor.toHexString() : null,
 			position: mesh.position.asArray(),
 			rotation: mesh.rotationQuaternion ? mesh.rotationQuaternion.toEulerAngles().asArray() : mesh.rotation.asArray(),
@@ -559,21 +533,18 @@ export class ObjectManager {
 	}
 	
 	removeObjectById (id, clearSelection = true) {
-		// If deleting the anchor, clear it first
 		const mesh = this.findMeshById(id);
 		if (mesh && this.snapManager.anchorMesh === mesh) {
 			this.snapManager.clearAnchor();
 		}
 		
 		if (mesh) {
-			// If it was a shadow caster, remove it from all generators
 			if (mesh.metadata && mesh.metadata.type !== 'light') {
 				const descendants = mesh.getChildMeshes(false);
 				descendants.push(mesh);
 				descendants.forEach(m => this.builderScene.unregisterShadowCaster(m));
 			}
 			
-			// If it was a light casting shadows, disable shadows
 			if (mesh.metadata && mesh.metadata.type === 'light') {
 				this.builderScene.disableShadows(id);
 			}
@@ -588,7 +559,6 @@ export class ObjectManager {
 		this.placedObjects = this.placedObjects.filter(o => o && o.id !== id);
 	}
 	
-	// Helper to create default Directional Light data
 	createDefaultMainLightData () {
 		return {
 			id: 'main_sun',
@@ -601,10 +571,10 @@ export class ObjectManager {
 			specularColor: '#ffffff',
 			position: [20, 40, 20],
 			direction: [-1, -2, -1],
-			rotation: [0, 0, 0], // Will be calculated from direction
+			rotation: [0, 0, 0],
 			scaling: [1, 1, 1],
 			intensity: 1.0,
-			castShadows: true // Default sun casts shadows
+			castShadows: true
 		};
 	}
 	
@@ -628,18 +598,14 @@ export class ObjectManager {
 		};
 	}
 	
-	restoreObject (data) {
+	// Modified to handle Asset Store instantiation
+	async restoreObject (data) {
 		if (data.type === 'light') {
-			// Delegate to LightManager
 			const { mesh, light } = this.lightManager.createLight(data.kind, BABYLON.Vector3.FromArray(data.position), data.name);
 			mesh.metadata = { id: data.id, isObject: true, type: 'light', kind: data.kind };
 			
-			// FIX: Restore Scaling
-			if (data.scaling) {
-				mesh.scaling = BABYLON.Vector3.FromArray(data.scaling);
-			}
+			if (data.scaling) mesh.scaling = BABYLON.Vector3.FromArray(data.scaling);
 			
-			// FIX: Restore Rotation (Point lights need this; others might override via direction in updateLightProperties)
 			if (data.rotation) {
 				const rot = BABYLON.Vector3.FromArray(data.rotation);
 				if (mesh.rotationQuaternion) {
@@ -649,48 +615,50 @@ export class ObjectManager {
 				}
 			}
 			
-			// Apply Properties
 			this.lightManager.updateLightProperties(mesh, data);
 			
-			// Restore Shadow State
-			if (data.castShadows) {
-				this.builderScene.enableShadows(mesh);
-			}
-			
-			// Visibility
-			if (data.isVisible === false) {
-				mesh.setEnabled(false);
-			}
+			if (data.castShadows) this.builderScene.enableShadows(mesh);
+			if (data.isVisible === false) mesh.setEnabled(false);
 			
 			this.placedObjects.push(data);
 			if (this.onListChange) this.onListChange();
 			return Promise.resolve();
 			
 		} else {
-			return BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, data.file, this.scene).then(res => {
-				const root = res.meshes[0];
-				root.name = data.name;
-				root.position = BABYLON.Vector3.FromArray(data.position);
-				root.rotation = BABYLON.Vector3.FromArray(data.rotation);
-				root.scaling = BABYLON.Vector3.FromArray(data.scaling);
-				root.metadata = { id: data.id, isObject: true, file: data.file };
-				
-				if (data.isVisible === false) root.setEnabled(false);
-				
-				res.meshes.forEach(m => {
-					// Register with all active shadow generators
-					this.builderScene.registerShadowCaster(m);
-					
-					m.receiveShadows = true;
-					m.isPickable = true;
-					if (m !== root) m.parent = root;
-				});
-				
-				this.placedObjects.push(data);
-				if (this.onListChange) this.onListChange();
-			}).catch(e => {
-				console.error("Failed to restore object:", data.name, e);
+			// Mesh Object
+			// Ensure asset is in store. If not, we might fail or need to lazy load (not implemented here for simplicity)
+			// For now, we assume the map loader has pre-populated the store.
+			
+			// Fallback: If assetName is missing (old map), try to use 'file' to find/add to store?
+			// This implementation assumes 'assetName' exists in data and in store.
+			const assetName = data.assetName;
+			
+			const root = this.assetManager.instantiate(assetName);
+			if (!root) {
+				console.warn(`Skipping object ${data.name}: Asset '${assetName}' not found in store.`);
+				return;
+			}
+			
+			root.name = data.name;
+			root.position = BABYLON.Vector3.FromArray(data.position);
+			root.rotation = BABYLON.Vector3.FromArray(data.rotation);
+			root.scaling = BABYLON.Vector3.FromArray(data.scaling);
+			root.metadata = { id: data.id, isObject: true, assetName: assetName };
+			
+			if (data.isVisible === false) root.setEnabled(false);
+			
+			const descendants = root.getChildMeshes(false);
+			descendants.push(root);
+			
+			descendants.forEach(m => {
+				this.builderScene.registerShadowCaster(m);
+				m.receiveShadows = true;
+				m.isPickable = true;
+				if (m !== root) m.parent = root;
 			});
+			
+			this.placedObjects.push(data);
+			if (this.onListChange) this.onListChange();
 		}
 	}
 	
@@ -811,17 +779,21 @@ export class ObjectManager {
 			this.scene.lights.find(l => l.metadata && l.metadata.id === id);
 	}
 	
+	// Updated to include Asset Store definitions
 	getMapData (mapName) {
+		// Get all assets currently in the store
+		const storeDefinitions = this.assetManager.getAllAssets();
+		
 		return {
 			name: mapName,
-			version: 2,
+			version: 3, // Bump version
+			assetStore: storeDefinitions, // Save the store definitions
 			assets: this.placedObjects,
 			groups: this.groups
 		};
 	}
 	
 	async loadMapData (data) {
-		// Clear Anchor when loading new map
 		this.snapManager.clearAnchor();
 		
 		[...this.scene.meshes].forEach(m => {
@@ -840,14 +812,21 @@ export class ObjectManager {
 		
 		this.selectObject(null, false);
 		
+		// 1. Restore Asset Store
+		this.assetManager.clear();
+		if (data.assetStore) {
+			for (const def of data.assetStore) {
+				await this.assetManager.addToStore(def.name, def.file, def.thumbnail);
+			}
+			if (this.onStoreChange) this.onStoreChange();
+		}
+		
 		if (this.onListChange) this.onListChange();
 		
 		if (data.assets && data.assets.length > 0) {
-			// Restore Objects
 			const promises = data.assets.map(item => this.restoreObject(item));
 			await Promise.all(promises);
 		} else {
-			// No assets (e.g. clearScene), add default lights
 			const defaultSun = this.createDefaultMainLightData();
 			const defaultAmbient = this.createDefaultAmbientLightData();
 			await this.restoreObject(defaultSun);
@@ -856,7 +835,9 @@ export class ObjectManager {
 	}
 	
 	clearScene () {
-		this.loadMapData({ assets: [], groups: [] });
+		// Keep the asset store, just clear placed objects
+		const currentStore = this.assetManager.getAllAssets();
+		this.loadMapData({ assetStore: currentStore, assets: [], groups: [] });
 	}
 	
 	saveToAutoSave () {
@@ -894,7 +875,6 @@ export class ObjectManager {
 				console.error('Failed to load auto-save', e);
 			}
 		} else {
-			// If no auto-save, load default empty map (which adds default light)
 			this.loadMapData({ assets: [], groups: [] });
 		}
 	}

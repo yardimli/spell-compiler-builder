@@ -76,9 +76,18 @@
 		<!-- Left Sidebar: Assets -->
 		<div id="left-sidebar">
 			<div id="left-sidebar-header">
-				<span>Map Builder Assets</span>
+				<span>Assets</span>
 				<span id="sidebar-toggle-icon">▼</span>
 			</div>
+			
+			<!-- NEW: Asset Store Panel -->
+			<div class="sidebar-section-header">Asset Store</div>
+			<div id="asset-store-list" class="sidebar-scroll-area">
+				<div class="empty-state">No assets in store.<br>Add from File Browser below.</div>
+			</div>
+			
+			<!-- Existing: File Browser -->
+			<div class="sidebar-section-header" style="border-top: 2px solid #1a252f;">File Browser</div>
 			<div style="padding: 5px 10px; background: #233342; border-bottom: 1px solid #1a252f;">
 				<select id="asset-folder-select"
 				        style="width: 100%; padding: 4px; background: #34495e; color: white; border: 1px solid #46607a; border-radius: 3px;">
@@ -86,10 +95,10 @@
 				</select>
 			</div>
 			
-			<div id="asset-list">
+			<div id="asset-list" class="sidebar-scroll-area">
 				<div id="asset-load-area">
 					<p style="color: #bdc3c7; font-size: 13px; margin-bottom: 15px;">Select a folder to load.</p>
-					<button id="btnLoadAssets" class="info" disabled>Load Assets</button>
+					<button id="btnLoadAssets" class="info" disabled>Load Files</button>
 				</div>
 			</div>
 		</div>
@@ -362,10 +371,28 @@
 		</div>
 	</div>
 	
+	<!-- Add Asset Modal -->
+	<div id="addAssetModal" class="modal-overlay">
+		<div class="modal-content">
+			<div class="modal-header">Add to Asset Store</div>
+			<div class="control-group">
+				<label>Asset Name (Unique ID):</label>
+				<input type="text" id="inputAssetName" placeholder="e.g. Rock_Large">
+			</div>
+			<div class="modal-footer">
+				<button id="btnCancelAddAsset" class="secondary">Cancel</button>
+				<button id="btnConfirmAddAsset">Add to Store</button>
+			</div>
+		</div>
+	</div>
+	
 	<!-- Custom Context Menu -->
 	<div id="context-menu">
-		<!-- Sidebar Items -->
-		<div class="ctx-item sidebar-only" id="ctx-add-grid">Add Grid of Objects...</div>
+		<!-- Store Items -->
+		<div class="ctx-item store-only" id="ctx-add-grid-store">Add Grid of Objects...</div>
+		
+		<!-- Browser Items -->
+		<div class="ctx-item browser-only" id="ctx-add-to-store">Add to Asset Store...</div>
 		
 		<!-- Scene Items -->
 		<div class="ctx-item scene-only" id="ctx-set-anchor">Set Anchor</div>

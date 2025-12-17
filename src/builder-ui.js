@@ -21,14 +21,12 @@ export class BuilderUI {
 			gridColor: '#555555',
 			bgColor: '#2c3e50',
 			autoSave: true,
-			// Default Steps
 			posStep: 0.1,
 			rotStep: 15,
 			scaleStep: 0.1,
 			cursorStep: 0.05
 		};
 		
-		// Auto Save State
 		this.lastSaveTime = null;
 		this.autoSaveInterval = null;
 		this.uiUpdateInterval = null;
@@ -37,8 +35,13 @@ export class BuilderUI {
 			this.propertyPanel = new PropertyPanel(this.manager);
 			this.treeView = new TreeView(this.manager);
 			
-			this.manager.onAssetSelectionChange = (file) => {
-				this.updateSidebarSelection(file);
+			this.manager.onAssetSelectionChange = (name) => {
+				this.updateAssetStoreSelection(name);
+			};
+			
+			// Listen for store changes to re-render the store list
+			this.manager.onStoreChange = () => {
+				this.renderAssetStore();
 			};
 		} else {
 			console.error('BuilderUI: ObjectManager is null during initialization.');
@@ -53,7 +56,7 @@ export class BuilderUI {
 			this.manager.loadFromAutoSave();
 		}
 		
-		this.setupAssetBrowser();
+		this.setupFileBrowser(); // Renamed from setupAssetBrowser
 		this.setupControls();
 		this.setupLeftSidebarToggle();
 		this.setupHistoryUI();
@@ -63,8 +66,12 @@ export class BuilderUI {
 		this.setupAutoSaveTimer();
 		this.setupSplitter();
 		this.setupStatusCoordinates();
+		
+		// Initial Render of Store
+		this.renderAssetStore();
 	}
 	
+	// ... (setupStatusCoordinates remains same) ...
 	setupStatusCoordinates () {
 		const coordsEl = document.getElementById('status-coords');
 		if (!coordsEl) return;
@@ -78,7 +85,6 @@ export class BuilderUI {
 					this.scene.camera
 				);
 				
-				// Ground plane at y=0
 				const plane = BABYLON.Plane.FromPositionAndNormal(BABYLON.Vector3.Zero(), BABYLON.Vector3.Up());
 				const distance = ray.intersectsPlane(plane);
 				
@@ -90,14 +96,13 @@ export class BuilderUI {
 		});
 	}
 	
-	setupAssetBrowser () {
+	setupFileBrowser () {
 		const folderSelect = document.getElementById('asset-folder-select');
 		const btnLoad = document.getElementById('btnLoadAssets');
 		const loadArea = document.getElementById('asset-load-area');
 		const listContainer = document.getElementById('asset-list');
 		const overlay = document.getElementById('loading-overlay');
 		
-		// 1. Populate Dropdown
 		const folders = getAvailableFolders();
 		if (folders.length === 0) {
 			const opt = document.createElement('option');
@@ -112,7 +117,6 @@ export class BuilderUI {
 				folderSelect.add(opt);
 			});
 			
-			// Restore last selected folder
 			const lastFolder = localStorage.getItem(this.LS_LAST_FOLDER_KEY);
 			if (lastFolder && folders.includes(lastFolder)) {
 				folderSelect.value = lastFolder;
@@ -121,13 +125,11 @@ export class BuilderUI {
 			}
 		}
 		
-		// 2. Handle Dropdown Change
 		folderSelect.onchange = () => {
 			const selectedFolder = folderSelect.value;
 			if (selectedFolder) {
 				localStorage.setItem(this.LS_LAST_FOLDER_KEY, selectedFolder);
 				
-				// Reset View
 				const items = listContainer.querySelectorAll('.category-header, .category-grid');
 				items.forEach(el => el.remove());
 				
@@ -137,7 +139,6 @@ export class BuilderUI {
 			}
 		};
 		
-		// 3. Handle Load Button Click
 		btnLoad.onclick = async () => {
 			const selectedFolder = folderSelect.value;
 			if (!selectedFolder) return;
@@ -150,7 +151,7 @@ export class BuilderUI {
 				const assets = await loadAssets(this.scene.scene, this.scene.camera, selectedFolder);
 				this.scene.restoreAfterThumbnailGeneration();
 				loadArea.style.display = 'none';
-				this.buildSidebar(assets, selectedFolder);
+				this.renderFileBrowser(assets, selectedFolder);
 			} catch (e) {
 				console.error('Failed to load assets:', e);
 				alert('Error loading assets. Check console.');
@@ -162,29 +163,22 @@ export class BuilderUI {
 		};
 	}
 	
-	// --- Sidebar Logic (Updated for Grouping) ---
-	buildSidebar (assets, folderName) {
+	// Renders the File Browser (Bottom Panel)
+	renderFileBrowser (assets, folderName) {
 		const listContainer = document.getElementById('asset-list');
-		
-		// Clear previous content (headers and grids)
 		const existingItems = listContainer.querySelectorAll('.category-header, .category-grid');
 		existingItems.forEach(el => el.remove());
 		
-		// Load collapsed state
 		let sidebarState = {};
 		try {
 			sidebarState = JSON.parse(localStorage.getItem(this.LS_SIDEBAR_KEY)) || {};
 		} catch (e) {}
 		
-		// 1. Group assets by prefix (split by '-' or '_')
 		const groups = {};
 		
 		assets.forEach(asset => {
-			// asset.file is "folder/filename.glb"
-			const filename = asset.file.split('/').pop(); // "rock-large.glb"
-			const nameNoExt = filename.replace(/\.glb$/i, ''); // "rock-large"
-			
-			// Split by '-' or '_' to find group name
+			const filename = asset.file.split('/').pop();
+			const nameNoExt = filename.replace(/\.glb$/i, '');
 			const parts = nameNoExt.split(/[_-]/);
 			const groupName = parts.length > 1 ? parts[0] : 'misc';
 			
@@ -194,19 +188,14 @@ export class BuilderUI {
 			groups[groupName].push(asset);
 		});
 		
-		// 2. Create UI for each group
 		Object.keys(groups).sort().forEach(groupName => {
-			// Create Header
 			const header = document.createElement('div');
 			header.className = 'category-header';
 			header.innerText = groupName.charAt(0).toUpperCase() + groupName.slice(1);
 			
-			// Create Grid Container
 			const grid = document.createElement('div');
 			grid.className = 'category-grid';
 			
-			// Check state (Default to Collapsed if not found/undefined)
-			// Using a unique key combining folder and group to avoid collisions
 			const stateKey = `${folderName}:${groupName}`;
 			const isCollapsed = sidebarState[stateKey] !== undefined ? sidebarState[stateKey] : true;
 			
@@ -215,39 +204,28 @@ export class BuilderUI {
 				grid.classList.add('hidden');
 			}
 			
-			// Toggle functionality
 			header.addEventListener('click', () => {
 				const collapsed = header.classList.toggle('collapsed');
 				grid.classList.toggle('hidden');
-				
-				// Save state
 				sidebarState[stateKey] = collapsed;
 				localStorage.setItem(this.LS_SIDEBAR_KEY, JSON.stringify(sidebarState));
 			});
 			
-			// Add Assets to Grid
 			groups[groupName].forEach(asset => {
 				const div = document.createElement('div');
-				div.className = 'asset-item';
+				div.className = 'asset-item browser-item'; // Add browser-item class
 				div.dataset.file = asset.file;
+				div.dataset.thumb = asset.src;
 				
 				const img = document.createElement('img');
 				img.className = 'asset-thumb';
 				img.src = asset.src;
 				
-				// Clean label: remove extension and group prefix
 				let cleanName = asset.file.split('/').pop().replace(/\.glb$/i, '');
-				
-				// Remove the group prefix from the name for cleaner display
-				// e.g. "rock-large" -> "large" inside "Rock" group
 				if (groupName !== 'misc' && cleanName.toLowerCase().startsWith(groupName.toLowerCase())) {
-					// Remove prefix and any following separator
 					cleanName = cleanName.substring(groupName.length).replace(/^[_-]/, '');
 				}
-				
-				// If name became empty (e.g. file was just "rock.glb" in "rock" group), revert to full name
 				if (!cleanName) cleanName = groupName;
-				
 				cleanName = cleanName.replace(/[_-]/g, ' ');
 				
 				const span = document.createElement('span');
@@ -257,8 +235,9 @@ export class BuilderUI {
 				div.appendChild(img);
 				div.appendChild(span);
 				
+				// Click on Browser Item -> Prompt to add to store
 				div.addEventListener('click', () => {
-					this.manager.setActiveAsset(asset.file);
+					this.openAddAssetModal(asset.file, asset.src, cleanName);
 				});
 				
 				grid.appendChild(div);
@@ -269,11 +248,58 @@ export class BuilderUI {
 		});
 	}
 	
-	// Helper to visually update the sidebar selection
-	updateSidebarSelection (selectedFile) {
-		const items = document.querySelectorAll('.asset-item');
+	// Renders the Asset Store (Top Panel)
+	renderAssetStore () {
+		const container = document.getElementById('asset-store-list');
+		container.innerHTML = '';
+		
+		const assets = this.manager.assetManager.getAllAssets();
+		
+		if (assets.length === 0) {
+			container.innerHTML = '<div class="empty-state">No assets in store.<br>Add from File Browser below.</div>';
+			return;
+		}
+		
+		const grid = document.createElement('div');
+		grid.className = 'category-grid';
+		grid.style.padding = '5px';
+		
+		assets.forEach(asset => {
+			const div = document.createElement('div');
+			div.className = 'asset-item store-item';
+			div.dataset.name = asset.name;
+			
+			const img = document.createElement('img');
+			img.className = 'asset-thumb';
+			img.src = asset.thumbnail;
+			
+			const span = document.createElement('span');
+			span.className = 'asset-name';
+			span.innerText = asset.name;
+			
+			div.appendChild(img);
+			div.appendChild(span);
+			
+			// Click on Store Item -> Set Active Asset for placement
+			div.addEventListener('click', () => {
+				this.manager.setActiveAsset(asset.name);
+			});
+			
+			grid.appendChild(div);
+		});
+		
+		container.appendChild(grid);
+		
+		// Re-apply selection highlight
+		if (this.manager.activeAssetName) {
+			this.updateAssetStoreSelection(this.manager.activeAssetName);
+		}
+	}
+	
+	updateAssetStoreSelection (selectedName) {
+		const items = document.querySelectorAll('.store-item');
 		items.forEach(item => {
-			if (item.dataset.file === selectedFile) {
+			if (item.dataset.name === selectedName) {
 				item.classList.add('selected');
 			} else {
 				item.classList.remove('selected');
@@ -281,6 +307,42 @@ export class BuilderUI {
 		});
 	}
 	
+	// Modal to add asset to store
+	openAddAssetModal (file, thumb, defaultName) {
+		const modal = document.getElementById('addAssetModal');
+		const input = document.getElementById('inputAssetName');
+		const btnConfirm = document.getElementById('btnConfirmAddAsset');
+		const btnCancel = document.getElementById('btnCancelAddAsset');
+		
+		input.value = defaultName.replace(/\s+/g, '_'); // Suggest ID-friendly name
+		modal.style.display = 'flex';
+		input.focus();
+		
+		const close = () => { modal.style.display = 'none'; };
+		
+		btnCancel.onclick = close;
+		
+		btnConfirm.onclick = () => {
+			const name = input.value.trim();
+			if (!name) {
+				alert('Please enter a name.');
+				return;
+			}
+			
+			this.manager.addAssetToStore(name, file, thumb).then(() => {
+				close();
+			}).catch(err => {
+				alert('Failed to add asset: ' + err.message);
+			});
+		};
+		
+		// Handle Enter key
+		input.onkeydown = (e) => {
+			if (e.key === 'Enter') btnConfirm.click();
+		};
+	}
+	
+	// ... (setupAutoSaveTimer, updateAutoSaveUI, loadSettings, saveSettings, applySettings, setupLeftSidebarToggle, setupSplitter remain same) ...
 	setupAutoSaveTimer () {
 		const btnSaveNow = document.getElementById('btnSaveNow');
 		const performSave = () => {
@@ -344,12 +406,10 @@ export class BuilderUI {
 		this.manager.scaleStep = parseFloat(this.globalSettings.scaleStep);
 		this.manager.cursorIncrement = parseFloat(this.globalSettings.cursorStep);
 		
-		// Update UI Inputs in Property Panel
 		if (this.propertyPanel) {
 			this.propertyPanel.updateInputSteps();
 		}
 		
-		// Update Cursor Step Input in Top Bar
 		const cursorInput = document.getElementById('inputCursorStep');
 		if (cursorInput) cursorInput.value = this.manager.cursorIncrement;
 		
@@ -387,10 +447,7 @@ export class BuilderUI {
 			const sidebarRect = rightSidebar.getBoundingClientRect();
 			const relativeY = e.clientY - sidebarRect.top;
 			
-			// Calculate percentage
 			let percentage = (relativeY / sidebarRect.height) * 100;
-			
-			// Constraints (min 10%, max 90%)
 			if (percentage < 10) percentage = 10;
 			if (percentage > 90) percentage = 90;
 			
@@ -423,7 +480,6 @@ export class BuilderUI {
 			e.target.value = '';
 		};
 		
-		// Light Dropdown Handlers
 		document.getElementById('btnAddPointLight').onclick = () => { this.manager.addLight('point'); };
 		document.getElementById('btnAddDirLight').onclick = () => { this.manager.addLight('directional'); };
 		document.getElementById('btnAddHemiLight').onclick = () => { this.manager.addLight('hemispheric'); };
@@ -435,29 +491,23 @@ export class BuilderUI {
 			}
 		};
 		
-		// Clear Selection Button Logic
 		document.getElementById('btnClearSelection').onclick = () => {
 			this.clearAllSelections();
 		};
 		
-		// ESC Key Logic
 		window.addEventListener('keydown', (e) => {
 			if (e.key === 'Escape') {
 				this.clearAllSelections();
-				this.manager.releaseAnchor(); // Release anchor on ESC
+				this.manager.releaseAnchor();
 			}
 			
-			// Delete Key Logic
 			if (e.key === 'Delete') {
-				// Prevent deletion if user is typing in an input field
 				const tag = e.target.tagName;
 				if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-				
 				this.manager.deleteSelected();
 			}
 		});
 		
-		// Cursor Increment Input
 		const inputStep = document.getElementById('inputCursorStep');
 		if (inputStep) {
 			inputStep.onchange = (e) => {
@@ -469,7 +519,6 @@ export class BuilderUI {
 		}
 	}
 	
-	// Helper to clear both asset placement selection and scene object selection
 	clearAllSelections () {
 		this.manager.setActiveAsset(null);
 		this.manager.selectObject(null, false);
@@ -526,7 +575,6 @@ export class BuilderUI {
 			inBgColor.value = this.globalSettings.bgColor;
 			inAutoSave.checked = this.globalSettings.autoSave;
 			
-			// Load Step Values
 			inPosStep.value = this.globalSettings.posStep;
 			inRotStep.value = this.globalSettings.rotStep;
 			inScaleStep.value = this.globalSettings.scaleStep;
@@ -544,7 +592,6 @@ export class BuilderUI {
 			this.globalSettings.bgColor = inBgColor.value;
 			this.globalSettings.autoSave = inAutoSave.checked;
 			
-			// Save Step Values
 			this.globalSettings.posStep = parseFloat(inPosStep.value);
 			this.globalSettings.rotStep = parseFloat(inRotStep.value);
 			this.globalSettings.scaleStep = parseFloat(inScaleStep.value);
@@ -559,9 +606,9 @@ export class BuilderUI {
 	
 	setupContextMenu () {
 		const menu = document.getElementById('context-menu');
-		const gridItem = document.getElementById('ctx-add-grid');
+		const gridItemStore = document.getElementById('ctx-add-grid-store');
+		const addToStoreItem = document.getElementById('ctx-add-to-store');
 		
-		// New Menu Items
 		const setAnchorItem = document.getElementById('ctx-set-anchor');
 		const releaseAnchorItem = document.getElementById('ctx-release-anchor');
 		const deleteAssetItem = document.getElementById('ctx-delete-asset');
@@ -572,20 +619,39 @@ export class BuilderUI {
 		const inRows = document.getElementById('gridRows');
 		const inCols = document.getElementById('gridCols');
 		
-		let targetFile = null;
+		let targetAssetName = null;
+		let targetBrowserFile = null;
+		let targetBrowserThumb = null;
 		let targetMesh = null;
 		
 		// 1. Sidebar Context Menu
-		const sidebar = document.getElementById('asset-list');
+		const sidebar = document.getElementById('left-sidebar');
 		sidebar.addEventListener('contextmenu', (e) => {
-			const assetItem = e.target.closest('.asset-item');
-			if (assetItem) {
+			const storeItem = e.target.closest('.store-item');
+			const browserItem = e.target.closest('.browser-item');
+			
+			if (storeItem) {
 				e.preventDefault();
-				targetFile = assetItem.dataset.file;
+				targetAssetName = storeItem.dataset.name;
+				targetBrowserFile = null;
 				targetMesh = null;
 				
-				// Show Sidebar items, Hide Scene items
-				document.querySelectorAll('.sidebar-only').forEach(el => el.style.display = 'block');
+				document.querySelectorAll('.store-only').forEach(el => el.style.display = 'block');
+				document.querySelectorAll('.browser-only').forEach(el => el.style.display = 'none');
+				document.querySelectorAll('.scene-only').forEach(el => el.style.display = 'none');
+				
+				menu.style.display = 'block';
+				menu.style.left = e.pageX + 'px';
+				menu.style.top = e.pageY + 'px';
+			} else if (browserItem) {
+				e.preventDefault();
+				targetBrowserFile = browserItem.dataset.file;
+				targetBrowserThumb = browserItem.dataset.thumb;
+				targetAssetName = null;
+				targetMesh = null;
+				
+				document.querySelectorAll('.store-only').forEach(el => el.style.display = 'none');
+				document.querySelectorAll('.browser-only').forEach(el => el.style.display = 'block');
 				document.querySelectorAll('.scene-only').forEach(el => el.style.display = 'none');
 				
 				menu.style.display = 'block';
@@ -601,7 +667,6 @@ export class BuilderUI {
 			
 			if (pick.hit && pick.pickedMesh && pick.pickedMesh.name !== 'ground') {
 				let mesh = pick.pickedMesh;
-				// Find root object
 				while (mesh && (!mesh.metadata || !mesh.metadata.isObject) && mesh.parent) {
 					mesh = mesh.parent;
 				}
@@ -609,10 +674,11 @@ export class BuilderUI {
 				if (mesh && mesh.metadata && mesh.metadata.isObject) {
 					e.preventDefault();
 					targetMesh = mesh;
-					targetFile = null;
+					targetAssetName = null;
+					targetBrowserFile = null;
 					
-					// Show Scene items, Hide Sidebar items
-					document.querySelectorAll('.sidebar-only').forEach(el => el.style.display = 'none');
+					document.querySelectorAll('.store-only').forEach(el => el.style.display = 'none');
+					document.querySelectorAll('.browser-only').forEach(el => el.style.display = 'none');
 					document.querySelectorAll('.scene-only').forEach(el => el.style.display = 'block');
 					
 					menu.style.display = 'block';
@@ -622,24 +688,29 @@ export class BuilderUI {
 			}
 		});
 		
-		// Global Click to Close
 		window.addEventListener('click', (e) => {
 			if (e.target.closest('.modal-content')) return;
 			menu.style.display = 'none';
 		});
 		
-		// --- Action Handlers ---
-		
-		// Grid Action
-		gridItem.onclick = () => {
-			if (targetFile) {
+		// Actions
+		gridItemStore.onclick = () => {
+			if (targetAssetName) {
 				menu.style.display = 'none';
 				gridModal.style.display = 'flex';
 				inRows.value = 3; inCols.value = 3;
 			}
 		};
 		
-		// Anchor Actions
+		addToStoreItem.onclick = () => {
+			if (targetBrowserFile) {
+				menu.style.display = 'none';
+				// Guess a name
+				const name = targetBrowserFile.split('/').pop().replace(/\.glb$/i, '');
+				this.openAddAssetModal(targetBrowserFile, targetBrowserThumb, name);
+			}
+		};
+		
 		setAnchorItem.onclick = () => {
 			if (targetMesh) {
 				this.manager.setAnchor(targetMesh);
@@ -659,14 +730,13 @@ export class BuilderUI {
 			}
 		};
 		
-		// Grid Modal Logic
 		const closeGridModal = () => { gridModal.style.display = 'none'; };
 		btnCancelGrid.onclick = closeGridModal;
 		btnCreateGrid.onclick = () => {
 			const r = parseInt(inRows.value);
 			const c = parseInt(inCols.value);
-			if (!isNaN(r) && !isNaN(c) && r > 0 && c > 0 && targetFile) {
-				this.manager.addAssetGrid(targetFile, this.scene.selectedCellPosition, r, c);
+			if (!isNaN(r) && !isNaN(c) && r > 0 && c > 0 && targetAssetName) {
+				this.manager.addAssetGrid(targetAssetName, this.scene.selectedCellPosition, r, c);
 				closeGridModal();
 			} else alert('Please enter valid positive numbers.');
 		};
