@@ -191,6 +191,16 @@ export class TreeView {
 			this.saveState();
 		};
 		
+		// NEW: Group Visibility Icon
+		const visIcon = document.createElement('span');
+		visIcon.className = 'tree-vis-icon';
+		visIcon.innerText = '👁';
+		visIcon.title = 'Toggle Group Visibility';
+		visIcon.onclick = (e) => {
+			e.stopPropagation();
+			this.manager.toggleGroupVisibility(group.id);
+		};
+		
 		const titleSpan = document.createElement('span');
 		titleSpan.innerText = group.name;
 		
@@ -277,6 +287,12 @@ export class TreeView {
 	renderObjectItem (obj, parentContainer) {
 		const item = document.createElement('div');
 		item.className = 'tree-item';
+		
+		// NEW: Hidden State
+		if (obj.isVisible === false) {
+			item.classList.add('hidden-item');
+		}
+		
 		item.dataset.id = obj.id;
 		item.draggable = true; // Enable drag
 		
@@ -286,6 +302,15 @@ export class TreeView {
 			e.dataTransfer.effectAllowed = 'move';
 		});
 		
+		// NEW: Visibility Icon
+		const visIcon = document.createElement('span');
+		visIcon.className = 'tree-vis-icon';
+		visIcon.innerText = (obj.isVisible === false) ? '✕' : '👁';
+		visIcon.onclick = (e) => {
+			e.stopPropagation();
+			this.manager.toggleObjectVisibility(obj.id);
+		};
+		
 		// Icon based on type
 		const icon = document.createElement('span');
 		icon.className = 'tree-icon';
@@ -294,6 +319,7 @@ export class TreeView {
 		const text = document.createElement('span');
 		text.innerText = obj.name;
 		
+		item.appendChild(visIcon);
 		item.appendChild(icon);
 		item.appendChild(text);
 		

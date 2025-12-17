@@ -37,6 +37,11 @@ export class ObjectManager {
 		this.defaultYOffset = 0;
 		this.autoSaveEnabled = true;
 		this.cursorIncrement = 0.05; // Default increment for arrow key movement
+		
+		// NEW: Precision Step Settings
+		this.posStep = 0.1;
+		this.rotStep = 15;
+		this.scaleStep = 0.1;
 
 		// Events
 		this.onSelectionChange = null; // Callback for UI
@@ -74,23 +79,50 @@ export class ObjectManager {
 
 	// --- Alignment Delegation ---
 	alignSelection (axis, mode) { this.alignmentManager.alignSelection(axis, mode); }
-	snapSelection (axis) { this.alignmentManager.snapSelection(axis); }
+	snapSelection (axis, margin) { this.alignmentManager.snapSelection(axis, margin); }
 
 	// --- Property Delegation ---
 	updateObjectProperty (id, prop, value) { this.propertyManager.updateObjectProperty(id, prop, value); }
 	updateMultipleObjectsProperty (prop, value) { this.propertyManager.updateMultipleObjectsProperty(prop, value); }
 	updateGroupTransform (prop, values) { this.propertyManager.updateGroupTransform(prop, values); }
 	updateObjectTransform (id, data) { this.propertyManager.updateObjectTransform(id, data); }
+	
+	// Visibility Delegation
+	toggleObjectVisibility (id) {
+		const obj = this.placedObjects.find(o => o.id === id);
+		if (obj) {
+			const newState = obj.isVisible === undefined ? false : !obj.isVisible;
+			this.propertyManager.updateVisibility(id, newState);
+		}
+	}
+	
+	toggleGroupVisibility (groupId) {
+		const group = this.groups.find(g => g.id === groupId);
+		if (group) {
+			// Check if any in group are visible
+			const anyVisible = group.objectIds.some(id => {
+				const obj = this.placedObjects.find(o => o.id === id);
+				return obj && (obj.isVisible !== false);
+			});
+			
+			// If any are visible, hide all. If all hidden, show all.
+			const targetState = !anyVisible;
+			
+			group.objectIds.forEach(id => {
+				this.propertyManager.updateVisibility(id, targetState);
+			});
+		}
+	}
 
 	// --- Operation Delegation ---
 	deleteSelected () { this.operationManager.deleteSelected(); }
 	duplicateSelection () { this.operationManager.duplicateSelection(); }
 
-	// --- Snap Delegation (NEW) ---
+	// --- Snap Delegation ---
 	setAnchor (mesh) { this.snapManager.setAnchor(mesh); }
 	releaseAnchor () { this.snapManager.clearAnchor(); }
 
-	// --- NEW: Asset Selection Logic ---
+	// --- Asset Selection Logic ---
 	setActiveAsset (file) {
 		if (this.activeAssetFile === file || file === null) {
 			this.activeAssetFile = null;
@@ -193,7 +225,7 @@ export class ObjectManager {
 		}
 	}
 
-	// REFACTORED: Uses SnapManager
+	// Uses SnapManager
 	updateGhostPosition (pickInfo) {
 		if (!this.ghostMesh || this.isGhostLoading || !pickInfo.hit) return;
 
@@ -395,7 +427,7 @@ export class ObjectManager {
 
 			this.selectObject(root, false);
 
-			// NEW: If an anchor was active, move it to the newly created object
+			// If an anchor was active, move it to the newly created object
 			if (this.snapManager.anchorMesh) {
 				this.snapManager.setAnchor(root);
 			}
@@ -449,6 +481,7 @@ export class ObjectManager {
 					file: filename,
 					type: 'mesh',
 					isLocked: false,
+					isVisible: true, // NEW
 					color: null,
 					position: mesh.position.asArray(),
 					rotation: mesh.rotationQuaternion ? mesh.rotationQuaternion.toEulerAngles().asArray() : mesh.rotation.asArray(),
@@ -504,6 +537,7 @@ export class ObjectManager {
 			name: name,
 			type: 'light',
 			isLocked: false,
+			isVisible: true, // NEW
 			color: null,
 			position: light.position.asArray(),
 			rotation: [0, 0, 0],
@@ -517,7 +551,7 @@ export class ObjectManager {
 	}
 
 	removeObjectById (id, clearSelection = true) {
-		// NEW: If deleting the anchor, clear it first
+		// If deleting the anchor, clear it first
 		const mesh = this.findMeshById(id);
 		if (mesh && this.snapManager.anchorMesh === mesh) {
 			this.snapManager.clearAnchor();
@@ -539,6 +573,8 @@ export class ObjectManager {
 			const light = new BABYLON.PointLight(data.name, BABYLON.Vector3.FromArray(data.position), this.scene);
 			light.intensity = 0.5;
 			light.metadata = { id: data.id, isObject: true, type: 'light' };
+			// NEW: Visibility
+			if (data.isVisible === false) light.setEnabled(false);
 
 			const sphere = BABYLON.MeshBuilder.CreateSphere(data.name + '_gizmo', { diameter: 0.5 }, this.scene);
 			sphere.position = light.position;
@@ -557,6 +593,9 @@ export class ObjectManager {
 				root.rotation = BABYLON.Vector3.FromArray(data.rotation);
 				root.scaling = BABYLON.Vector3.FromArray(data.scaling);
 				root.metadata = { id: data.id, isObject: true, file: data.file };
+				
+				// NEW: Visibility
+				if (data.isVisible === false) root.setEnabled(false);
 
 				res.meshes.forEach(m => {
 					this.shadowGenerator.addShadowCaster(m, true);

@@ -50,6 +50,9 @@ export class PropertyPanel {
 			}
 		};
 		
+		// NEW: Snap Margin Input
+		this.inputSnapMargin = getEl('inputSnapMargin');
+		
 		// Reset Tint Buttons
 		this.btnResetTint = getEl('btnResetTint');
 		this.btnResetTintMulti = getEl('btnResetTintMulti');
@@ -87,6 +90,17 @@ export class PropertyPanel {
 		if (this.objectManager) {
 			this.objectManager.onSelectionChange = (data) => this.updateUI(data);
 		}
+	}
+	
+	// NEW: Method to update input steps from manager settings
+	updateInputSteps() {
+		if (!this.objectManager) return;
+		
+		['x', 'y', 'z'].forEach(axis => {
+			if (this.inputs.pos[axis]) this.inputs.pos[axis].step = this.objectManager.posStep;
+			if (this.inputs.rot[axis]) this.inputs.rot[axis].step = this.objectManager.rotStep;
+			if (this.inputs.scale[axis]) this.inputs.scale[axis].step = this.objectManager.scaleStep;
+		});
 	}
 	
 	setupGizmoControls () {
@@ -191,10 +205,10 @@ export class PropertyPanel {
 		if (this.alignButtons.zCenter) this.alignButtons.zCenter.onclick = () => this.objectManager.alignSelection('z', 'center');
 		if (this.alignButtons.zMax) this.alignButtons.zMax.onclick = () => this.objectManager.alignSelection('z', 'max');
 		
-		// Spacing
-		if (this.snapButtons.x) this.snapButtons.x.onclick = () => this.objectManager.snapSelection('x');
-		if (this.snapButtons.y) this.snapButtons.y.onclick = () => this.objectManager.snapSelection('y');
-		if (this.snapButtons.z) this.snapButtons.z.onclick = () => this.objectManager.snapSelection('z');
+		// Spacing, Pass margin value
+		if (this.snapButtons.x) this.snapButtons.x.onclick = () => this.objectManager.snapSelection('x', parseFloat(this.inputSnapMargin.value) || 0);
+		if (this.snapButtons.y) this.snapButtons.y.onclick = () => this.objectManager.snapSelection('y', parseFloat(this.inputSnapMargin.value) || 0);
+		if (this.snapButtons.z) this.snapButtons.z.onclick = () => this.objectManager.snapSelection('z', parseFloat(this.inputSnapMargin.value) || 0);
 		
 		// Grouping
 		if (this.btnCreateGroup) {

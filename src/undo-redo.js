@@ -82,6 +82,16 @@ export class UndoRedoManager {
 					affectedIds.push(change.id);
 				});
 				break;
+			
+				// NEW: Property Change (Visibility)
+			case 'PROPERTY':
+				action.data.forEach(change => {
+					if (change.prop === 'isVisible') {
+						this.manager.propertyManager.updateVisibility(change.id, change.newValue);
+						// Don't select, just update state
+					}
+				});
+				break;
 		}
 		
 		return affectedIds;
@@ -107,6 +117,15 @@ export class UndoRedoManager {
 				action.data.forEach(change => {
 					this.manager.updateObjectTransform(change.id, change.oldData);
 					affectedIds.push(change.id);
+				});
+				break;
+			
+			// NEW: Property Change (Visibility)
+			case 'PROPERTY':
+				action.data.forEach(change => {
+					if (change.prop === 'isVisible') {
+						this.manager.propertyManager.updateVisibility(change.id, change.oldValue);
+					}
 				});
 				break;
 		}

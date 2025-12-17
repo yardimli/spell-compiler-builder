@@ -13,7 +13,7 @@
 		<div class="spinner"></div>
 		<div id="loading-text">Generating Thumbnails...</div>
 	</div>
-
+	
 	<!-- Top Menu Bar -->
 	<div id="top-bar">
 		<div class="menu-group">
@@ -22,43 +22,46 @@
 			<button id="btnLoad" class="secondary">Load</button>
 			<input type="file" id="fileInput" accept=".json">
 		</div>
-
+		
 		<div class="menu-group">
 			<button id="btnUndo" class="secondary" disabled title="Undo (Ctrl+Z)">↶ Undo</button>
 			<button id="btnRedo" class="secondary" disabled title="Redo (Ctrl+Y)">↷ Redo</button>
 		</div>
-
+		
 		<!-- Gizmo Controls -->
 		<div class="menu-group">
 			<button id="btnGizmoPos" class="active" title="Move (G)">Move</button>
 			<button id="btnGizmoRot" title="Rotate (R)">Rotate</button>
 			<button id="btnGizmoScale" title="Scale (S)">Scale</button>
 		</div>
-
+		
 		<!-- Nudge Controls -->
 		<div class="menu-group">
 			<span style="color: #bdc3c7; font-size: 12px; margin-right: 5px;">Step:</span>
-			<input type="number" id="inputCursorStep" value="0.005" step="0.005" min="0.001" style="width: 75px; text-align: center; padding: 2px; border: 1px solid #34495e; background: #233342; color: white; border-radius: 3px;" title="Arrow Key Increment">
+			<input type="number" id="inputCursorStep" value="0.005" step="0.005" min="0.001"
+			       style="width: 75px; text-align: center; padding: 2px; border: 1px solid #34495e; background: #233342; color: white; border-radius: 3px;"
+			       title="Arrow Key Increment">
 		</div>
-
+		
 		<!-- Object Actions -->
 		<div class="menu-group">
 			<button id="btnDuplicate" disabled title="Duplicate Selected">Duplicate</button>
 			<button id="btnDeleteObj" class="danger" disabled title="Delete Selected">Delete</button>
 		</div>
-
+		
 		<div class="menu-group">
 			<button id="btnAddLight" title="Add Point Light">💡 Add Light</button>
-			<button id="btnClearSelection" class="secondary" title="Clear Asset/Object Selection (Esc)">Clear Selection</button>
+			<button id="btnClearSelection" class="secondary" title="Clear Asset/Object Selection (Esc)">Clear Selection
+			</button>
 			<button id="btnResetCam" class="secondary">Reset Camera</button>
 			<button id="btnClearScene" class="danger">Clear Scene</button>
 		</div>
-
+		
 		<div class="menu-group" style="border-right: none; margin-left: auto;">
 			<button id="btnSettings" class="info">⚙ Settings</button>
 		</div>
 	</div>
-
+	
 	<!-- Main Content -->
 	<div id="main-content">
 		<!-- Left Sidebar: Assets -->
@@ -68,11 +71,12 @@
 				<span id="sidebar-toggle-icon">▼</span>
 			</div>
 			<div style="padding: 5px 10px; background: #233342; border-bottom: 1px solid #1a252f;">
-				<select id="asset-folder-select" style="width: 100%; padding: 4px; background: #34495e; color: white; border: 1px solid #46607a; border-radius: 3px;">
+				<select id="asset-folder-select"
+				        style="width: 100%; padding: 4px; background: #34495e; color: white; border: 1px solid #46607a; border-radius: 3px;">
 					<option value="" disabled selected>Select Folder...</option>
 				</select>
 			</div>
-
+			
 			<div id="asset-list">
 				<div id="asset-load-area">
 					<p style="color: #bdc3c7; font-size: 13px; margin-bottom: 15px;">Select a folder to load.</p>
@@ -80,15 +84,15 @@
 				</div>
 			</div>
 		</div>
-
+		
 		<!-- Canvas -->
 		<canvas id="renderCanvas"></canvas>
-
+		
 		<!-- Right Sidebar: Properties + Tree View -->
 		<div id="right-sidebar">
 			<!-- Properties Panel -->
 			<div id="properties-panel">
-
+				
 				<!-- Lock Toggle -->
 				<div class="prop-group">
 					<div class="prop-row" style="justify-content: flex-start;">
@@ -96,7 +100,7 @@
 						<label for="chkLock" style="margin: 0; cursor: pointer; color: white;">Lock Object(s)</label>
 					</div>
 				</div>
-
+				
 				<!-- Shared Properties -->
 				<div id="shared-props">
 					<!-- Single Object Specifics (Name + Color + Reset) -->
@@ -109,9 +113,9 @@
 							</div>
 						</div>
 					</div>
-
+					
 					<!-- Removed separate Tint Color group from shared-props -->
-
+					
 					<div class="prop-group">
 						<div class="prop-row compact">
 							<div class="input-col"><span>Pos: X</span><input type="number" id="posX" step="0.1"></div>
@@ -119,7 +123,7 @@
 							<div class="input-col"><span>Z</span><input type="number" id="posZ" step="0.1"></div>
 						</div>
 					</div>
-
+					
 					<div class="prop-group">
 						<div class="prop-row compact">
 							<div class="input-col"><span>Rot: X</span><input type="number" id="rotX" step="15"></div>
@@ -127,7 +131,7 @@
 							<div class="input-col"><span>Z</span><input type="number" id="rotZ" step="15"></div>
 						</div>
 					</div>
-
+					
 					<div class="prop-group">
 						<div class="prop-row compact">
 							<div class="input-col"><span>Scale: X</span><input type="number" id="scaleX" step="0.1"></div>
@@ -136,7 +140,7 @@
 						</div>
 					</div>
 				</div>
-
+				
 				<!-- Multi Object View -->
 				<div id="multi-obj-props" style="display: none;">
 					<!-- Multi-Select Color Control -->
@@ -149,58 +153,63 @@
 							</div>
 						</div>
 					</div>
-
+					
 					<div class="prop-group">
 						<label>Alignment</label>
 						<!-- X Axis -->
 						<div class="align-grid">
 							<span>X</span>
-							<button id="btnAlignXMin" class="secondary" title="Align Left">Min</button>
-							<button id="btnAlignXCenter" class="secondary" title="Align Center X">Mid</button>
-							<button id="btnAlignXMax" class="secondary" title="Align Right">Max</button>
+							<button id="btnAlignXMin" class="btn-axis-x" title="Align Left">Min</button>
+							<button id="btnAlignXCenter" class="btn-axis-x" title="Align Center X">Mid</button>
+							<button id="btnAlignXMax" class="btn-axis-x" title="Align Right">Max</button>
 						</div>
 						<!-- Y Axis -->
 						<div class="align-grid">
 							<span>Y</span>
-							<button id="btnAlignYMin" class="secondary" title="Align Bottom">Bot</button>
-							<button id="btnAlignYCenter" class="secondary" title="Align Center Y">Mid</button>
-							<button id="btnAlignYMax" class="secondary" title="Align Top">Top</button>
+							<button id="btnAlignYMin" class="btn-axis-y" title="Align Bottom">Bot</button>
+							<button id="btnAlignYCenter" class="btn-axis-y" title="Align Center Y">Mid</button>
+							<button id="btnAlignYMax" class="btn-axis-y" title="Align Top">Top</button>
 						</div>
 						<!-- Z Axis -->
 						<div class="align-grid">
 							<span>Z</span>
-							<button id="btnAlignZMin" class="secondary" title="Align Back">Min</button>
-							<button id="btnAlignZCenter" class="secondary" title="Align Center Z">Mid</button>
-							<button id="btnAlignZMax" class="secondary" title="Align Front">Max</button>
+							<button id="btnAlignZMin" class="btn-axis-z" title="Align Back">Min</button>
+							<button id="btnAlignZCenter" class="btn-axis-z" title="Align Center Z">Mid</button>
+							<button id="btnAlignZMax" class="btn-axis-z" title="Align Front">Max</button>
 						</div>
 					</div>
-
+					
 					<!-- Spacing Group -->
 					<div class="prop-group">
 						<label>Space Side-by-Side</label>
+						<!-- NEW: Margin Input -->
+						<div class="control-row" style="margin-bottom: 5px;">
+							<span style="font-size: 11px; color: #bdc3c7;">Margin:</span>
+							<input type="number" id="inputSnapMargin" value="0" step="0.1" style="width: 60px; padding: 2px; text-align: center;">
+						</div>
 						<div class="control-row">
-							<button id="btnSnapX" class="secondary" title="Snap objects together on X axis">Snap X</button>
-							<button id="btnSnapY" class="secondary" title="Snap objects together on Y axis">Snap Y</button>
-							<button id="btnSnapZ" class="secondary" title="Snap objects together on Z axis">Snap Z</button>
+							<button id="btnSnapX" class="btn-axis-x" title="Snap objects together on X axis">Snap X</button>
+							<button id="btnSnapY" class="btn-axis-y" title="Snap objects together on Y axis">Snap Y</button>
+							<button id="btnSnapZ" class="btn-axis-z" title="Snap objects together on Z axis">Snap Z</button>
 						</div>
 					</div>
-
+					
 					<!-- Grouping Control -->
 					<div class="prop-group">
 						<label>Grouping</label>
 						<button id="btnCreateGroup" class="info" style="width: 100%;">Group Selected</button>
 					</div>
-
+					
 					<div class="prop-group">
 						<label>Selected Objects</label>
 						<div id="multi-select-container"></div>
 					</div>
 				</div>
 			</div>
-
+			
 			<!-- NEW: Splitter Handle -->
 			<div id="sidebar-splitter"></div>
-
+			
 			<!-- Tree View -->
 			<div id="tree-view">
 				<div id="tree-header">
@@ -211,7 +220,7 @@
 			</div>
 		</div>
 	</div>
-
+	
 	<!-- Bottom Status Bar -->
 	<div id="status-bar">
 		<div id="status-left">Ready</div>
@@ -220,29 +229,55 @@
 			<a href="#" id="btnSaveNow" style="color: #3498db; text-decoration: none; margin-left: 5px;">Save Now</a>
 		</div>
 	</div>
-
+	
 	<!-- Modals (Settings, Grid, Save) -->
 	<div id="settingsModal" class="modal-overlay">
 		<div class="modal-content">
 			<div class="modal-header">Global Settings</div>
-			<div class="control-group">
-				<label>New Object Y-Offset:</label>
-				<input type="number" id="settingYOffset" step="0.1" value="0">
+			<div class="control-group" style="border-bottom: 1px solid #34495e; padding-bottom: 10px; margin-bottom: 10px;">
+				<label style="color: #f1c40f;">Input Precision (Steps)</label>
+				<div class="control-row">
+					<span>Pos Step:</span>
+					<input type="number" id="settingPosStep" step="0.0001" min="0.0001" value="0.1">
+				</div>
+				<div class="control-row">
+					<span>Rot Step:</span>
+					<input type="number" id="settingRotStep" step="0.0001" min="0.0001" value="15">
+				</div>
+				<div class="control-row">
+					<span>Scale Step:</span>
+					<input type="number" id="settingScaleStep" step="0.0001" min="0.0001" value="0.1">
+				</div>
+				<div class="control-row">
+					<span>Cursor Step:</span>
+					<input type="number" id="settingCursorStep" step="0.0001" min="0.0001" value="0.05">
+				</div>
 			</div>
 			<div class="control-group">
-				<label>Grid Cell Size:</label>
-				<input type="number" id="settingGridSize" step="0.5" min="0.5" value="2.5">
+				<div class="control-row">
+					<label>New Object Y-Offset:</label>
+					<input type="number" id="settingYOffset" step="0.1" value="0">
+				</div>
 			</div>
 			<div class="control-group">
-				<label>Grid Line Color:</label>
-				<input type="color" id="settingGridColor" value="#555555">
+				<div class="control-row">
+					<label>Grid Cell Size:</label>
+					<input type="number" id="settingGridSize" step="0.5" min="0.5" value="2.5">
+				</div>
 			</div>
 			<div class="control-group">
-				<label>Canvas Background Color:</label>
-				<input type="color" id="settingBgColor" value="#2c3e50">
+				<div class="control-row">
+					<label>Grid Line Color:</label>
+					<input type="color" id="settingGridColor" value="#555555">
+				</div>
+			</div>
+			<div class="control-group">
+				<div class="control-row">
+					<label>Canvas Background Color:</label>
+					<input type="color" id="settingBgColor" value="#2c3e50">
+				</div>
 			</div>
 			<div class="control-group" style="margin-top: 10px; border-top: 1px solid #34495e; padding-top: 10px;">
-				<label style="color: #2ecc71;">Session:</label>
 				<div class="control-row">
 					<label><input type="checkbox" id="settingAutoSave" checked> Auto-Save Map (LocalStorage)</label>
 				</div>
@@ -253,7 +288,7 @@
 			</div>
 		</div>
 	</div>
-
+	
 	<div id="gridModal" class="modal-overlay">
 		<div class="modal-content">
 			<div class="modal-header">Add Object Grid</div>
@@ -271,7 +306,7 @@
 			</div>
 		</div>
 	</div>
-
+	
 	<div id="saveMapModal" class="modal-overlay">
 		<div class="modal-content">
 			<div class="modal-header">Save Map</div>
@@ -285,16 +320,18 @@
 			</div>
 		</div>
 	</div>
-
+	
 	<!-- Custom Context Menu -->
 	<div id="context-menu">
 		<!-- Sidebar Items -->
 		<div class="ctx-item sidebar-only" id="ctx-add-grid">Add Grid of Objects...</div>
-
+		
 		<!-- Scene Items -->
 		<div class="ctx-item scene-only" id="ctx-set-anchor">Set Anchor</div>
 		<div class="ctx-item scene-only" id="ctx-release-anchor">Release Anchor</div>
-		<div class="ctx-item scene-only" id="ctx-delete-asset" style="border-top: 1px solid #34495e; color: #e74c3c;">Delete Asset</div>
+		<div class="ctx-item scene-only" id="ctx-delete-asset" style="border-top: 1px solid #34495e; color: #e74c3c;">Delete
+			Asset
+		</div>
 	</div>
 </div>
 </body>

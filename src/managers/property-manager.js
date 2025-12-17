@@ -69,6 +69,32 @@ export class PropertyManager {
 		});
 	}
 	
+	updateVisibility (id, isVisible) {
+		const mesh = this.om.findMeshById(id);
+		const objData = this.om.placedObjects.find(o => o.id === id);
+		
+		if (objData) {
+			const oldValue = objData.isVisible !== undefined ? objData.isVisible : true;
+			
+			// Apply
+			objData.isVisible = isVisible;
+			if (mesh) mesh.setEnabled(isVisible);
+			
+			// Add to Undo
+			this.om.undoRedo.add({
+				type: 'PROPERTY',
+				data: [{
+					id: id,
+					prop: 'isVisible',
+					oldValue: oldValue,
+					newValue: isVisible
+				}]
+			});
+			
+			if (this.om.onListChange) this.om.onListChange();
+		}
+	}
+	
 	updateMultipleObjectsProperty (prop, value) {
 		if (prop === 'isLocked') {
 			this.om.selectedMeshes.forEach(mesh => {

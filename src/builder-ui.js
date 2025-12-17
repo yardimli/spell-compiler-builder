@@ -19,7 +19,12 @@ export class BuilderUI {
 			gridSize: 2.5,
 			gridColor: '#555555',
 			bgColor: '#2c3e50',
-			autoSave: true
+			autoSave: true,
+			// NEW: Default Steps
+			posStep: 0.1,
+			rotStep: 15,
+			scaleStep: 0.1,
+			cursorStep: 0.05
 		};
 
 		// Auto Save State
@@ -310,6 +315,22 @@ export class BuilderUI {
 		this.manager.defaultYOffset = parseFloat(this.globalSettings.yOffset);
 		this.manager.gridSize = parseFloat(this.globalSettings.gridSize);
 		this.manager.autoSaveEnabled = this.globalSettings.autoSave;
+		
+		// NEW: Apply Steps to Manager
+		this.manager.posStep = parseFloat(this.globalSettings.posStep);
+		this.manager.rotStep = parseFloat(this.globalSettings.rotStep);
+		this.manager.scaleStep = parseFloat(this.globalSettings.scaleStep);
+		this.manager.cursorIncrement = parseFloat(this.globalSettings.cursorStep);
+		
+		// Update UI Inputs in Property Panel
+		if (this.propertyPanel) {
+			this.propertyPanel.updateInputSteps();
+		}
+		
+		// Update Cursor Step Input in Top Bar
+		const cursorInput = document.getElementById('inputCursorStep');
+		if (cursorInput) cursorInput.value = this.manager.cursorIncrement;
+		
 		this.scene.setGridColors(this.globalSettings.gridColor, this.globalSettings.bgColor);
 		this.scene.updateGridSize(this.manager.gridSize);
 		this.updateAutoSaveUI();
@@ -466,6 +487,12 @@ export class BuilderUI {
 		const inGridColor = document.getElementById('settingGridColor');
 		const inBgColor = document.getElementById('settingBgColor');
 		const inAutoSave = document.getElementById('settingAutoSave');
+		
+		// NEW: Step Inputs
+		const inPosStep = document.getElementById('settingPosStep');
+		const inRotStep = document.getElementById('settingRotStep');
+		const inScaleStep = document.getElementById('settingScaleStep');
+		const inCursorStep = document.getElementById('settingCursorStep');
 
 		btnOpen.onclick = () => {
 			inYOffset.value = this.globalSettings.yOffset;
@@ -473,8 +500,16 @@ export class BuilderUI {
 			inGridColor.value = this.globalSettings.gridColor;
 			inBgColor.value = this.globalSettings.bgColor;
 			inAutoSave.checked = this.globalSettings.autoSave;
+			
+			// Load Step Values
+			inPosStep.value = this.globalSettings.posStep;
+			inRotStep.value = this.globalSettings.rotStep;
+			inScaleStep.value = this.globalSettings.scaleStep;
+			inCursorStep.value = this.globalSettings.cursorStep;
+			
 			modal.style.display = 'flex';
 		};
+		
 		const close = () => { modal.style.display = 'none'; };
 		btnCancel.onclick = close;
 		btnSave.onclick = () => {
@@ -483,6 +518,13 @@ export class BuilderUI {
 			this.globalSettings.gridColor = inGridColor.value;
 			this.globalSettings.bgColor = inBgColor.value;
 			this.globalSettings.autoSave = inAutoSave.checked;
+			
+			// Save Step Values
+			this.globalSettings.posStep = parseFloat(inPosStep.value);
+			this.globalSettings.rotStep = parseFloat(inRotStep.value);
+			this.globalSettings.scaleStep = parseFloat(inScaleStep.value);
+			this.globalSettings.cursorStep = parseFloat(inCursorStep.value);
+			
 			this.saveSettings();
 			this.applySettings();
 			close();
