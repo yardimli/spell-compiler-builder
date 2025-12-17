@@ -110,9 +110,6 @@ export class OperationManager {
 					m.receiveShadows = true;
 					m.isPickable = true;
 					
-					if (m.material && m.material.name.includes('_tinted')) {
-						m.material = m.material.clone(m.material.name + '_' + newId);
-					}
 				});
 			}
 			

@@ -36,8 +36,6 @@ export class PropertyPanel {
 		this.inputs = {
 			name: getEl('propName'),
 			lock: getEl('chkLock'),
-			tint: getEl('propTint'), // Single Tint
-			tintMulti: getEl('propTintMulti'), // Multi Tint
 			pos: {
 				x: getEl('posX'),
 				y: getEl('posY'),
@@ -68,10 +66,6 @@ export class PropertyPanel {
 		
 		// Snap Margin Input
 		this.inputSnapMargin = getEl('inputSnapMargin');
-		
-		// Reset Tint Buttons
-		this.btnResetTint = getEl('btnResetTint');
-		this.btnResetTintMulti = getEl('btnResetTintMulti');
 		
 		// Alignment Buttons
 		this.alignButtons = {
@@ -169,40 +163,6 @@ export class PropertyPanel {
 					// Multi
 					this.objectManager.updateMultipleObjectsProperty('isLocked', isLocked);
 				}
-			};
-		}
-		
-		// Tint Color (Single)
-		if (this.inputs.tint) {
-			this.inputs.tint.onchange = (e) => {
-				if (this.currentObjectId) {
-					this.objectManager.updateObjectProperty(this.currentObjectId, 'color', e.target.value);
-				}
-			};
-		}
-		
-		// Tint Color (Multi)
-		if (this.inputs.tintMulti) {
-			this.inputs.tintMulti.onchange = (e) => {
-				this.objectManager.updateMultipleObjectsProperty('color', e.target.value);
-			};
-		}
-		
-		// Reset Tint (Single)
-		if (this.btnResetTint) {
-			this.btnResetTint.onclick = () => {
-				if (this.currentObjectId) {
-					this.objectManager.updateObjectProperty(this.currentObjectId, 'color', null);
-					if (this.inputs.tint) this.inputs.tint.value = '#ffffff';
-				}
-			};
-		}
-		
-		// Reset Tint (Multi)
-		if (this.btnResetTintMulti) {
-			this.btnResetTintMulti.onclick = () => {
-				this.objectManager.updateMultipleObjectsProperty('color', null);
-				if (this.inputs.tintMulti) this.inputs.tintMulti.value = '#ffffff';
 			};
 		}
 		
@@ -361,11 +321,6 @@ export class PropertyPanel {
 				this.inputs.lock.indeterminate = false;
 			}
 			
-			// Tint Color (Single)
-			if (this.inputs.tint) {
-				this.inputs.tint.value = data.color || '#ffffff';
-			}
-			
 			// Position
 			if (this.inputs.pos.x) this.inputs.pos.x.value = parseFloat(data.position[0]).toFixed(2);
 			if (this.inputs.pos.y) this.inputs.pos.y.value = parseFloat(data.position[1]).toFixed(2);
@@ -449,11 +404,6 @@ export class PropertyPanel {
 				} else {
 					this.inputs.lock.indeterminate = true;
 				}
-			}
-			
-			// Determine Color (Use first, or white if mixed)
-			if (this.inputs.tintMulti) {
-				this.inputs.tintMulti.value = dataArray[0].color || '#ffffff';
 			}
 			
 			// Determine Transforms (Use Proxy Transform)

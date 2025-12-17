@@ -24,9 +24,6 @@ export class PropertyManager {
 				const light = mesh.getChildren().find(c => c instanceof BABYLON.Light);
 				if (light) light.diffuse = BABYLON.Color3.FromHexString(value || '#ffffff');
 				objData.color = value;
-			} else {
-				objData.color = value;
-				this.om.applyColorToMesh(mesh, value);
 			}
 			return;
 		}
@@ -206,8 +203,6 @@ export class PropertyManager {
 					if (objData.type === 'light') {
 						const light = mesh.getChildren().find(c => c instanceof BABYLON.Light);
 						if (light) light.diffuse = BABYLON.Color3.FromHexString(value);
-					} else {
-						this.om.applyColorToMesh(mesh, value);
 					}
 				}
 			});

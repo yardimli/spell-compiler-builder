@@ -1,6 +1,7 @@
 #TODO
 
 #TODO 12
+- add asset store, remove tint from assets
 - create a new file to manage cameras called camera-manager.js, move existing camera code there.
 - allow adding multiple cameras to the scene, allow user to drag, rotate the camera, in properties add fov settings for cameras besides position, direction and rotation.
 - allow user to view scene from different cameras using a dropdown in the top menubar
@@ -10,11 +11,12 @@
 #TODO 13
 - allow to reorder assets in the treeview with drag and drop to change rendering order
 - allow to nest groups within other groups in the treeview
+
+#TODO 14
+- use llm to generate procedural scenes that can be run then edited by the user and saved
+
+#TODO LATER AFTER TESTING CREAT OF SCENES
 - allow user to edit asset colors for individual meshes inside a glb file, if there is a texture file allow to use it, or just use a color tint, show it in an modal for the selected asset where user can see the results.
-
-
-
-#TODO LATER NON-CRITICAL
 - on the hemispheric light also show the direction in the mesh on the scene
 - in updateGhostPosition() when snapping instead of only having 8 points to snap change it to 3d so each side will have 9 points (4 corners, 4 midpoints and center) so total 6 sides x 9 points = 54 points to snap from
 - allow enabling disabling skybox (implement in global settings modal)

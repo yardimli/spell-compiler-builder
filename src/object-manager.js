@@ -634,6 +634,21 @@ export class ObjectManager {
 			const { mesh, light } = this.lightManager.createLight(data.kind, BABYLON.Vector3.FromArray(data.position), data.name);
 			mesh.metadata = { id: data.id, isObject: true, type: 'light', kind: data.kind };
 			
+			// FIX: Restore Scaling
+			if (data.scaling) {
+				mesh.scaling = BABYLON.Vector3.FromArray(data.scaling);
+			}
+			
+			// FIX: Restore Rotation (Point lights need this; others might override via direction in updateLightProperties)
+			if (data.rotation) {
+				const rot = BABYLON.Vector3.FromArray(data.rotation);
+				if (mesh.rotationQuaternion) {
+					mesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(rot);
+				} else {
+					mesh.rotation = rot;
+				}
+			}
+			
 			// Apply Properties
 			this.lightManager.updateLightProperties(mesh, data);
 			
@@ -670,10 +685,6 @@ export class ObjectManager {
 					m.isPickable = true;
 					if (m !== root) m.parent = root;
 				});
-				
-				if (data.color) {
-					this.applyColorToMesh(root, data.color);
-				}
 				
 				this.placedObjects.push(data);
 				if (this.onListChange) this.onListChange();
@@ -798,51 +809,6 @@ export class ObjectManager {
 	findMeshById (id) {
 		return this.scene.meshes.find(m => m.metadata && m.metadata.id === id) ||
 			this.scene.lights.find(l => l.metadata && l.metadata.id === id);
-	}
-	
-	applyColorToMesh (root, hexColor) {
-		const meshes = root.getChildMeshes(false);
-		if (root.material) meshes.push(root);
-		
-		meshes.forEach(m => {
-			if (!m.material) return;
-			
-			if (!m.reservedOriginalMaterial) {
-				m.reservedOriginalMaterial = m.material;
-			}
-			
-			if (hexColor === null) {
-				if (m.material !== m.reservedOriginalMaterial) {
-					const tintedMaterial = m.material;
-					m.material = m.reservedOriginalMaterial;
-					tintedMaterial.dispose();
-				}
-			} else {
-				const color = BABYLON.Color3.FromHexString(hexColor);
-				
-				if (m.material === m.reservedOriginalMaterial) {
-					const cloneName = m.material.name + '_tinted_' + root.metadata.id;
-					const newMat = m.material.clone(cloneName);
-					m.material = newMat;
-				}
-				
-				if (m.material instanceof BABYLON.PBRMaterial) {
-					m.material.albedoColor = color;
-				} else if (m.material instanceof BABYLON.StandardMaterial) {
-					m.material.diffuseColor = color;
-				}
-			}
-		});
-		
-		// Update child light color if present
-		const childLight = root.getChildren().find(n => n instanceof BABYLON.Light);
-		if (childLight) {
-			if (hexColor) {
-				childLight.diffuse = BABYLON.Color3.FromHexString(hexColor);
-			} else {
-				childLight.diffuse = new BABYLON.Color3(1, 1, 1);
-			}
-		}
 	}
 	
 	getMapData (mapName) {
