@@ -515,6 +515,21 @@ export class ObjectManager {
 			this.selectObject(null, false);
 
 			this.undoRedo.add({ type: 'ADD', data: addedObjectsData });
+
+			// Create a new group for the grid
+			const objectIds = addedObjectsData.map(o => o.id);
+			const baseGroupName = `${assetName}_grid`;
+			let groupIndex = 1;
+
+			// Find unique name
+			while (this.groups.some(g => g.name === `${baseGroupName}_${groupIndex}`)) {
+				groupIndex++;
+			}
+			const groupName = `${baseGroupName}_${groupIndex}`;
+
+			// createGroup handles selection of the group items
+			this.createGroup(groupName, objectIds);
+
 			if (this.onListChange) this.onListChange();
 		} catch (e) {
 			console.error('Grid spawn error:', e);
