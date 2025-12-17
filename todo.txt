@@ -1,27 +1,22 @@
 #TODO
 
-#TODO 11
-- add a new js file for managing lights called light-manager.js
-- make light button open a dropdown with Pointlight, DirectionalLight, HemisphericLight
-- add property panel for lights to adjust color diffuse and specular for all 3 types and groundColor for HemisphericLight
-- add property panel for lights to adjust location for Pointlight
-- add property panel for lights to adjust direction for DirectionalLight and HemisphericLight
-- show different simple 3d representations for each light type on the scene
-- a new scene should have a default light (HemisphericLight)
-
 #TODO 12
-- each scene should start with one default camera that can't be deleted in the treeview
+- create a new file to manage cameras called camera-manager.js, move existing camera code there.
 - allow adding multiple cameras to the scene, allow user to drag, rotate the camera, in properties add fov settings for cameras besides position, direction and rotation.
 - allow user to view scene from different cameras using a dropdown in the top menubar
-- allow user to edit asset colors for individual meshes inside a glb file, if there is a texture file allow to use it, or just use a color tint, show it in an modal for the selected asset where user can see the results.
+- EditorCamera should not be saved as part of the scene, only user added cameras should be saved, and should be the default camera in the dropdown, EditorCamera can not be removed either.
+- render cameras with a simple 3d representation including where it is looking on the scene so user can see where they are located
+
+#TODO 13
 - allow to reorder assets in the treeview with drag and drop to change rendering order
+- allow to nest groups within other groups in the treeview
+- allow user to edit asset colors for individual meshes inside a glb file, if there is a texture file allow to use it, or just use a color tint, show it in an modal for the selected asset where user can see the results.
 
 
 
-
-#TODO MAYBE STUFF
-- in updateGhostPosition() when snapping if the ghost is overlapping more than 50% of the selected asset dont set the y position to be on the same y as the selected asset being snapped to, instead use the existing y position of the ghost which will be over the target asset
-- instead of only having 8 points to snap change it to 3d so each side will have 9 points (4 corners, 4 midpoints and center) so total 6 sides x 9 points = 54 points to snap from
+#TODO LATER NON-CRITICAL
+- on the hemispheric light also show the direction in the mesh on the scene
+- in updateGhostPosition() when snapping instead of only having 8 points to snap change it to 3d so each side will have 9 points (4 corners, 4 midpoints and center) so total 6 sides x 9 points = 54 points to snap from
 - allow enabling disabling skybox (implement in global settings modal)
 var createScene = function () {
     var scene = new BABYLON.Scene(engine);
@@ -170,3 +165,18 @@ BUG: deleting an asset breaks the tree view with error
 - the snap side by side should have a margin setting
 - in settings modal allow user to set minimum increment for position(downto 0.0001), and default position (downto 0.0001), same for rotation and scale, and cursor movement properties
 - in the ui use same color for x,y,x buttons as the arrow colors when moving an asset
+
+#TODO 11
+currently dirLight along with shadowGenerator are initialized static on load, the app should check if localstorage or a file being loaded has a asset with "type": "light", and use that one to add the light and the shadowGenerator instead of defining them in init(), also if either localstorage or a file doesnt have it add the default DirectionalLight to the scene with the shadowgenerator
+currently only one light gets shadowgenerator update the code so all lights have properties for intensity, direction and shadow generator checkbox in the property editor
+- make DirectionalLight and ShadowGenerator load as part of file not on scene init
+
+- add a new js file for managing lights called light-manager.js
+- make light button open a dropdown with Pointlight, DirectionalLight, HemisphericLight
+- add property panel for lights to adjust color diffuse and specular for all 3 types and groundColor for HemisphericLight
+- keep the current property editors and add make sure that
+- adjust location for Pointlight and DirectionalLight
+- adjust direction for DirectionalLight and HemisphericLight
+- show different simple 3d representations for each light type on the scene and a reprententation of direction for DirectionalLight and HemisphericLight
+- also make sure a new scene have at least one HemisphericLight, same as the sun
+- when moving the mouse in the statusbar show the current mouse position in world coordinates (x,y,z) based on the ground plane
