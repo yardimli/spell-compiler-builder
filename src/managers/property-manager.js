@@ -104,7 +104,7 @@ export class PropertyManager {
 		}
 	}
 	
-	// NEW: Batch update for groups to create single undo entry
+	// Batch update for groups to create single undo entry
 	updateVisibilityBatch (ids, isVisible) {
 		const changes = [];
 		

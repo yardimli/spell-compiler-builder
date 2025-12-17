@@ -1,6 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
-// Removed automatic loadAssets import
 import { ObjectManager } from './object-manager';
 
 export class BuilderScene {
@@ -16,7 +15,6 @@ export class BuilderScene {
 		
 		// Interaction State
 		this.selectedCellPosition = new BABYLON.Vector3(0, 0, 0);
-		// Dragging state removed as we now use Gizmos
 		
 		// Visual Settings Defaults
 		this.gridColor = '#555555';
@@ -52,7 +50,7 @@ export class BuilderScene {
 		// Attach control immediately so scroll wheel works all the time
 		this.camera.attachControl(this.canvas, true);
 		this.camera.inputs.remove(this.camera.inputs.attached.keyboard);
-
+		
 		// 0 disables panning completely (Standard Input)
 		this.camera.panningSensibility = 0;
 		
@@ -60,31 +58,19 @@ export class BuilderScene {
 		this.camera.angularSensibilityX = Infinity;
 		this.camera.angularSensibilityY = Infinity;
 		
-		// 4. Lights
-		const dirLight = new BABYLON.DirectionalLight('dirLight', new BABYLON.Vector3(-1, -2, -1), this.scene);
-		dirLight.position = new BABYLON.Vector3(20, 40, 20);
-		dirLight.intensity = 1.0;
+		// 4. Object Manager (Handles Logic)
+		// Pass 'this' (BuilderScene) instead of scene and shadowGenerator
+		// so ObjectManager can request shadow generator setup.
+		this.objectManager = new ObjectManager(this);
 		
-		// Shadow Configuration
-		this.shadowGenerator = new BABYLON.ShadowGenerator(2048, dirLight);
-		// Use PCF for softer shadows if available, otherwise BlurExponential
-		this.shadowGenerator.usePercentageCloserFiltering = true;
-		this.shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_HIGH;
-		// Ensure objects cast shadows on each other properly
-		this.shadowGenerator.transparencyShadow = true;
-		this.shadowGenerator.bias = 0.0001; // Small bias to prevent acne
-		
-		// 5. Object Manager (Handles Logic)
-		this.objectManager = new ObjectManager(this.scene, this.shadowGenerator);
-		
-		// 6. Grid (Created after settings are loaded in UI, but init here with defaults)
+		// 5. Grid (Created after settings are loaded in UI, but init here with defaults)
 		this.createGrid(this.objectManager.gridSize);
 		
-		// 7. Interaction
+		// 6. Interaction
 		this.setupInteraction();
 		this.setupKeyboardControls();
 		
-		// 8. Render Loop
+		// 7. Render Loop
 		this.engine.runRenderLoop(() => {
 			this.scene.render();
 		});
@@ -93,8 +79,22 @@ export class BuilderScene {
 			this.engine.resize();
 		});
 		
-		// Note: Assets are no longer loaded here automatically
 		return [];
+	}
+	
+	// Helper to setup the shadow generator for a specific light (called by ObjectManager)
+	setupShadows (light) {
+		if (this.shadowGenerator) {
+			this.shadowGenerator.dispose();
+		}
+		
+		this.shadowGenerator = new BABYLON.ShadowGenerator(2048, light);
+		// Use PCF for softer shadows if available, otherwise BlurExponential
+		this.shadowGenerator.usePercentageCloserFiltering = true;
+		this.shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_HIGH;
+		// Ensure objects cast shadows on each other properly
+		this.shadowGenerator.transparencyShadow = true;
+		this.shadowGenerator.bias = 0.0001; // Small bias to prevent acne
 	}
 	
 	// --- Camera Locking ---

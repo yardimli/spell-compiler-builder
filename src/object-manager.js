@@ -13,9 +13,10 @@ const LS_AUTOSAVE_KEY = 'builder_autosave_map';
 const LS_SELECTION_KEY = 'builder_selection_state';
 
 export class ObjectManager {
-	constructor (scene, shadowGenerator) {
-		this.scene = scene;
-		this.shadowGenerator = shadowGenerator;
+	constructor (builderScene) {
+		// Accept builderScene to access scene and shadowGenerator dynamically
+		this.builderScene = builderScene;
+		this.scene = builderScene.scene;
 		
 		// State
 		this.placedObjects = []; // Array of metadata objects
@@ -38,7 +39,7 @@ export class ObjectManager {
 		this.autoSaveEnabled = true;
 		this.cursorIncrement = 0.05; // Default increment for arrow key movement
 		
-		// NEW: Precision Step Settings
+		// Precision Step Settings
 		this.posStep = 0.1;
 		this.rotStep = 15;
 		this.scaleStep = 0.1;
@@ -64,6 +65,11 @@ export class ObjectManager {
 	set gridSize (val) {
 		this._gridSize = val;
 		this.gizmoController.updateGizmoSettings();
+	}
+	
+	// Getter for shadowGenerator from BuilderScene
+	get shadowGenerator () {
+		return this.builderScene.shadowGenerator;
 	}
 	
 	// --- Gizmo Delegation ---
@@ -404,7 +410,9 @@ export class ObjectManager {
 			root.metadata = { id: id, isObject: true, file: filename };
 			
 			result.meshes.forEach(m => {
-				this.shadowGenerator.addShadowCaster(m, true);
+				if (this.shadowGenerator) {
+					this.shadowGenerator.addShadowCaster(m, true);
+				}
 				m.receiveShadows = true;
 				m.isPickable = true;
 				if (m !== root) m.parent = root;
@@ -469,7 +477,9 @@ export class ObjectManager {
 				mesh.metadata = { id: id, isObject: true, file: filename };
 				
 				mesh.getChildMeshes(false).forEach(m => {
-					this.shadowGenerator.addShadowCaster(m, true);
+					if (this.shadowGenerator) {
+						this.shadowGenerator.addShadowCaster(m, true);
+					}
 					m.receiveShadows = true;
 					m.isPickable = true;
 				});
@@ -520,31 +530,37 @@ export class ObjectManager {
 		const existingLights = this.placedObjects.filter(o => o.type === 'light');
 		const name = `Light_${existingLights.length + 1}`;
 		
-		const light = new BABYLON.PointLight(name, new BABYLON.Vector3(position.x, 5 + this.defaultYOffset, position.z), this.scene);
-		light.intensity = 0.5;
-		light.metadata = { id: id, isObject: true, type: 'light' };
-		
+		// 1. Create Gizmo Sphere (The Root Object)
+		// This sphere acts as the handle for the light, ensuring Gizmos work correctly (as they require a Mesh)
 		const sphere = BABYLON.MeshBuilder.CreateSphere(name + '_gizmo', { diameter: 0.5 }, this.scene);
-		sphere.position = light.position;
+		sphere.position = new BABYLON.Vector3(position.x, 5 + this.defaultYOffset, position.z);
 		sphere.material = new BABYLON.StandardMaterial('lm', this.scene);
 		sphere.material.emissiveColor = new BABYLON.Color3(1, 1, 0);
-		sphere.setParent(light);
 		sphere.isPickable = true;
+		
+		// Metadata goes on Sphere
+		sphere.metadata = { id: id, isObject: true, type: 'light', kind: 'point' };
+		
+		// 2. Create Light (Child)
+		const light = new BABYLON.PointLight(name, BABYLON.Vector3.Zero(), this.scene);
+		light.intensity = 0.5;
+		light.parent = sphere;
 		
 		const objData = {
 			id: id,
 			name: name,
 			type: 'light',
+			kind: 'point',
 			isLocked: false,
 			isVisible: true, // NEW
 			color: null,
-			position: light.position.asArray(),
+			position: sphere.position.asArray(),
 			rotation: [0, 0, 0],
 			scaling: [1, 1, 1]
 		};
 		
 		this.placedObjects.push(objData);
-		this.selectObject(light, false);
+		this.selectObject(sphere, false);
 		this.undoRedo.add({ type: 'ADD', data: [objData] });
 		if (this.onListChange) this.onListChange();
 	}
@@ -567,23 +583,88 @@ export class ObjectManager {
 		this.placedObjects = this.placedObjects.filter(o => o && o.id !== id);
 	}
 	
+	// Helper to create default Directional Light data
+	createDefaultMainLightData () {
+		return {
+			id: 'main_sun',
+			name: 'Sun',
+			type: 'light',
+			kind: 'directional',
+			isLocked: false,
+			isVisible: true,
+			color: '#ffffff',
+			position: [20, 40, 20],
+			direction: [-1, -2, -1],
+			rotation: [0, 0, 0],
+			scaling: [1, 1, 1],
+			intensity: 1.0
+		};
+	}
+	
 	restoreObject (data) {
 		if (data.type === 'light') {
-			const light = new BABYLON.PointLight(data.name, BABYLON.Vector3.FromArray(data.position), this.scene);
-			light.intensity = 0.5;
-			light.metadata = { id: data.id, isObject: true, type: 'light' };
-			// NEW: Visibility
-			if (data.isVisible === false) light.setEnabled(false);
-			
-			const sphere = BABYLON.MeshBuilder.CreateSphere(data.name + '_gizmo', { diameter: 0.5 }, this.scene);
-			sphere.position = light.position;
-			sphere.material = new BABYLON.StandardMaterial('lm', this.scene);
-			sphere.material.emissiveColor = new BABYLON.Color3(1, 1, 0);
-			sphere.setParent(light);
-			
-			this.placedObjects.push(data);
-			if (this.onListChange) this.onListChange();
-			return Promise.resolve();
+			if (data.kind === 'directional') {
+				// Handle Directional Light (Main Sun)
+				// Create Gizmo Sphere as Root
+				const sphere = BABYLON.MeshBuilder.CreateSphere(data.name + '_gizmo', { diameter: 1.0 }, this.scene);
+				sphere.position = new BABYLON.Vector3(data.position[0], data.position[1], data.position[2]);
+				sphere.metadata = { id: data.id, isObject: true, type: 'light', kind: 'directional' };
+				sphere.isPickable = true;
+				
+				const mat = new BABYLON.StandardMaterial('sunMat', this.scene);
+				mat.emissiveColor = new BABYLON.Color3(1, 0.5, 0); // Orange sun
+				sphere.material = mat;
+				
+				// Create Light as Child
+				const dir = new BABYLON.Vector3(data.direction[0], data.direction[1], data.direction[2]);
+				const light = new BABYLON.DirectionalLight(data.name, dir, this.scene);
+				light.intensity = data.intensity !== undefined ? data.intensity : 1.0;
+				light.parent = sphere;
+				
+				if (data.color) {
+					light.diffuse = BABYLON.Color3.FromHexString(data.color);
+				}
+				
+				// Setup Shadows via BuilderScene
+				this.builderScene.setupShadows(light);
+				
+				// Visibility
+				if (data.isVisible === false) {
+					sphere.setEnabled(false); // Hides light too since it's child
+				}
+				
+				this.placedObjects.push(data);
+				if (this.onListChange) this.onListChange();
+				return Promise.resolve();
+				
+			} else {
+				// Handle Point Light
+				// Create Gizmo Sphere as Root
+				const sphere = BABYLON.MeshBuilder.CreateSphere(data.name + '_gizmo', { diameter: 0.5 }, this.scene);
+				sphere.position = BABYLON.Vector3.FromArray(data.position);
+				sphere.metadata = { id: data.id, isObject: true, type: 'light', kind: 'point' };
+				sphere.isPickable = true;
+				
+				const mat = new BABYLON.StandardMaterial('lm', this.scene);
+				mat.emissiveColor = new BABYLON.Color3(1, 1, 0);
+				sphere.material = mat;
+				
+				// Create Light as Child
+				const light = new BABYLON.PointLight(data.name, BABYLON.Vector3.Zero(), this.scene);
+				light.intensity = 0.5;
+				light.parent = sphere;
+				
+				this.builderScene.setupShadows(light);
+				
+				// Visibility
+				if (data.isVisible === false) {
+					sphere.setEnabled(false);
+				}
+				
+				this.placedObjects.push(data);
+				if (this.onListChange) this.onListChange();
+				return Promise.resolve();
+			}
 		} else {
 			return BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, data.file, this.scene).then(res => {
 				const root = res.meshes[0];
@@ -593,11 +674,12 @@ export class ObjectManager {
 				root.scaling = BABYLON.Vector3.FromArray(data.scaling);
 				root.metadata = { id: data.id, isObject: true, file: data.file };
 				
-				// NEW: Visibility
 				if (data.isVisible === false) root.setEnabled(false);
 				
 				res.meshes.forEach(m => {
-					this.shadowGenerator.addShadowCaster(m, true);
+					if (this.shadowGenerator) {
+						this.shadowGenerator.addShadowCaster(m, true);
+					}
 					m.receiveShadows = true;
 					m.isPickable = true;
 					if (m !== root) m.parent = root;
@@ -765,6 +847,16 @@ export class ObjectManager {
 				}
 			}
 		});
+		
+		// Update child light color if present
+		const childLight = root.getChildren().find(n => n instanceof BABYLON.Light);
+		if (childLight) {
+			if (hexColor) {
+				childLight.diffuse = BABYLON.Color3.FromHexString(hexColor);
+			} else {
+				childLight.diffuse = new BABYLON.Color3(1, 1, 1);
+			}
+		}
 	}
 	
 	getMapData (mapName) {
@@ -799,8 +891,28 @@ export class ObjectManager {
 		if (this.onListChange) this.onListChange();
 		
 		if (data.assets) {
-			const promises = data.assets.map(item => this.restoreObject(item));
+			// Handle Main Light Loading
+			// 1. Check for Directional Light
+			let mainLightData = data.assets.find(a => a.type === 'light' && a.kind === 'directional');
+			
+			// 2. If not found, create default data
+			if (!mainLightData) {
+				mainLightData = this.createDefaultMainLightData();
+			}
+			
+			// 3. Restore Main Light FIRST to ensure ShadowGenerator is ready for meshes
+			const otherAssets = data.assets.filter(a => a !== mainLightData);
+			
+			// Restore Main Light
+			await this.restoreObject(mainLightData);
+			
+			// Restore Others
+			const promises = otherAssets.map(item => this.restoreObject(item));
 			await Promise.all(promises);
+		} else {
+			// No assets (e.g. clearScene), add default light
+			const defaultLight = this.createDefaultMainLightData();
+			await this.restoreObject(defaultLight);
 		}
 	}
 	
@@ -842,6 +954,9 @@ export class ObjectManager {
 			} catch (e) {
 				console.error('Failed to load auto-save', e);
 			}
+		} else {
+			// If no auto-save, load default empty map (which adds default light)
+			this.loadMapData({ assets: [], groups: [] });
 		}
 	}
 }

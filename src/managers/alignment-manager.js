@@ -143,14 +143,13 @@ export class AlignmentManager {
 		
 		if (lockedIndices.length === 0) {
 			let currentEdge = meshesWithBounds[0].bounds.max[axis];
-			// CHANGED: Apply margin to initial edge? No, usually between objects.
 			// Start applying margin for the second object onwards.
 			
 			for (let i = 1; i < meshesWithBounds.length; i++) {
 				const item = meshesWithBounds[i];
 				const mesh = item.mesh;
 				
-				// CHANGED: Add margin to the current edge before calculating shift
+				// Add margin to the current edge before calculating shift
 				currentEdge += margin;
 				
 				const dim = item.bounds.max[axis] - item.bounds.min[axis];
@@ -173,7 +172,7 @@ export class AlignmentManager {
 				if (item.data.isLocked) {
 					backEdge = item.bounds.min[axis];
 				} else {
-					// CHANGED: Apply margin
+					// Apply margin
 					backEdge -= margin;
 					
 					const dim = item.bounds.max[axis] - item.bounds.min[axis];
@@ -195,7 +194,7 @@ export class AlignmentManager {
 				if (item.data.isLocked) {
 					fwdEdge = item.bounds.max[axis];
 				} else {
-					// CHANGED: Apply margin
+					// Apply margin
 					fwdEdge += margin;
 					
 					const dim = item.bounds.max[axis] - item.bounds.min[axis];

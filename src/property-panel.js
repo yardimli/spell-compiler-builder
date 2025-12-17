@@ -50,7 +50,7 @@ export class PropertyPanel {
 			}
 		};
 		
-		// NEW: Snap Margin Input
+		// Snap Margin Input
 		this.inputSnapMargin = getEl('inputSnapMargin');
 		
 		// Reset Tint Buttons
@@ -92,7 +92,6 @@ export class PropertyPanel {
 		}
 	}
 	
-	// NEW: Method to update input steps from manager settings
 	updateInputSteps() {
 		if (!this.objectManager) return;
 		
@@ -270,12 +269,10 @@ export class PropertyPanel {
 		if (this.btnDelete) this.btnDelete.disabled = !hasSelection;
 		
 		if (!hasSelection) {
-			// CHANGED: Use visibility hidden instead of display none to preserve split layout
 			this.panel.style.visibility = 'hidden';
 			this.currentObjectId = null;
 		} else if (dataArray.length === 1) {
 			// SINGLE SELECTION
-			// CHANGED: Use visibility visible
 			this.panel.style.visibility = 'visible';
 			this.panel.style.display = 'flex'; // Ensure flex layout is active
 			
@@ -314,7 +311,6 @@ export class PropertyPanel {
 			if (this.inputs.scale.z) this.inputs.scale.z.value = parseFloat(data.scaling[2]).toFixed(2);
 		} else {
 			// MULTI SELECTION
-			// CHANGED: Use visibility visible
 			this.panel.style.visibility = 'visible';
 			this.panel.style.display = 'flex';
 			

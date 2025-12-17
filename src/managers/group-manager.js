@@ -58,7 +58,7 @@ export class GroupManager {
 		this.om.groups = this.om.groups.filter(g => g.objectIds.length > 0);
 	}
 	
-	// NEW: Move object to a specific group (Drag & Drop support)
+	// Move object to a specific group (Drag & Drop support)
 	moveObjectToGroup (objectId, targetGroupId) {
 		// 1. Remove from all groups first
 		this.om.groups.forEach(g => {
@@ -79,7 +79,7 @@ export class GroupManager {
 		if (this.om.onListChange) this.om.onListChange();
 	}
 	
-	// NEW: Remove object from any group (Drag to root support)
+	// Remove object from any group (Drag to root support)
 	ungroupObject (objectId) {
 		this.om.groups.forEach(g => {
 			g.objectIds = g.objectIds.filter(id => id !== objectId);

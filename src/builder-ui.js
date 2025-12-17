@@ -20,7 +20,7 @@ export class BuilderUI {
 			gridColor: '#555555',
 			bgColor: '#2c3e50',
 			autoSave: true,
-			// NEW: Default Steps
+			// Default Steps
 			posStep: 0.1,
 			rotStep: 15,
 			scaleStep: 0.1,
@@ -36,7 +36,6 @@ export class BuilderUI {
 			this.propertyPanel = new PropertyPanel(this.manager);
 			this.treeView = new TreeView(this.manager);
 
-			// NEW: Listen for asset selection changes to update UI
 			this.manager.onAssetSelectionChange = (file) => {
 				this.updateSidebarSelection(file);
 			};
@@ -61,8 +60,6 @@ export class BuilderUI {
 		this.setupSaveModal();
 		this.setupContextMenu();
 		this.setupAutoSaveTimer();
-
-		// NEW: Setup the sidebar splitter
 		this.setupSplitter();
 	}
 
@@ -233,7 +230,6 @@ export class BuilderUI {
 				div.appendChild(img);
 				div.appendChild(span);
 
-				// NEW: Click selects the asset for placement instead of placing immediately
 				div.addEventListener('click', () => {
 					this.manager.setActiveAsset(asset.file);
 				});
@@ -246,7 +242,7 @@ export class BuilderUI {
 		});
 	}
 
-	// NEW: Helper to visually update the sidebar selection
+	// Helper to visually update the sidebar selection
 	updateSidebarSelection (selectedFile) {
 		const items = document.querySelectorAll('.asset-item');
 		items.forEach(item => {
@@ -316,7 +312,6 @@ export class BuilderUI {
 		this.manager.gridSize = parseFloat(this.globalSettings.gridSize);
 		this.manager.autoSaveEnabled = this.globalSettings.autoSave;
 		
-		// NEW: Apply Steps to Manager
 		this.manager.posStep = parseFloat(this.globalSettings.posStep);
 		this.manager.rotStep = parseFloat(this.globalSettings.rotStep);
 		this.manager.scaleStep = parseFloat(this.globalSettings.scaleStep);
@@ -344,7 +339,6 @@ export class BuilderUI {
 		}
 	}
 
-	// NEW: Setup Splitter Logic
 	setupSplitter () {
 		const splitter = document.getElementById('sidebar-splitter');
 		const propPanel = document.getElementById('properties-panel');
@@ -409,19 +403,19 @@ export class BuilderUI {
 			}
 		};
 
-		// NEW: Clear Selection Button Logic
+		// Clear Selection Button Logic
 		document.getElementById('btnClearSelection').onclick = () => {
 			this.clearAllSelections();
 		};
 
-		// NEW: ESC Key Logic
+		// ESC Key Logic
 		window.addEventListener('keydown', (e) => {
 			if (e.key === 'Escape') {
 				this.clearAllSelections();
 				this.manager.releaseAnchor(); // Release anchor on ESC
 			}
 
-			// NEW: Delete Key Logic
+			// Delete Key Logic
 			if (e.key === 'Delete') {
 				// Prevent deletion if user is typing in an input field
 				const tag = e.target.tagName;
@@ -431,7 +425,7 @@ export class BuilderUI {
 			}
 		});
 
-		// NEW: Cursor Increment Input
+		// Cursor Increment Input
 		const inputStep = document.getElementById('inputCursorStep');
 		if (inputStep) {
 			inputStep.onchange = (e) => {
@@ -443,7 +437,7 @@ export class BuilderUI {
 		}
 	}
 
-	// NEW: Helper to clear both asset placement selection and scene object selection
+	// Helper to clear both asset placement selection and scene object selection
 	clearAllSelections () {
 		this.manager.setActiveAsset(null);
 		this.manager.selectObject(null, false);
@@ -488,7 +482,6 @@ export class BuilderUI {
 		const inBgColor = document.getElementById('settingBgColor');
 		const inAutoSave = document.getElementById('settingAutoSave');
 		
-		// NEW: Step Inputs
 		const inPosStep = document.getElementById('settingPosStep');
 		const inRotStep = document.getElementById('settingRotStep');
 		const inScaleStep = document.getElementById('settingScaleStep');

@@ -80,7 +80,7 @@ export class TreeView {
 			e.preventDefault();
 			this.content.classList.remove('drag-over');
 			
-			// FIXED: Removed strict check (e.target === this.content) to allow drops from groups to root
+			// Removed strict check (e.target === this.content) to allow drops from groups to root
 			const data = e.dataTransfer.getData('text/plain');
 			if (data) {
 				try {
@@ -105,7 +105,7 @@ export class TreeView {
 		
 		// 2. Render Ungrouped Objects
 		const groupedIds = this.manager.groups.flatMap(g => g.objectIds);
-		// FIXED: Safety check for obj existence
+		// Safety check for obj existence
 		const ungroupedObjects = this.manager.placedObjects.filter(obj => obj && !groupedIds.includes(obj.id));
 		
 		// Sort alphabetically
@@ -116,7 +116,7 @@ export class TreeView {
 		});
 		
 		// Re-apply highlights based on current selection
-		// FIXED: Robust check to prevent crash if selectedMeshes contains disposed items or placedObjects has issues
+		// Robust check to prevent crash if selectedMeshes contains disposed items or placedObjects has issues
 		const currentSelection = this.manager.selectedMeshes
 			.map(m => {
 				if (!m || !m.metadata) return null;
@@ -191,7 +191,7 @@ export class TreeView {
 			this.saveState();
 		};
 		
-		// NEW: Group Visibility Icon
+		// Group Visibility Icon
 		const visIcon = document.createElement('span');
 		visIcon.className = 'tree-vis-icon';
 		
@@ -277,7 +277,7 @@ export class TreeView {
 		itemsContainer.className = 'tree-group-items';
 		
 		// Find objects belonging to this group
-		// FIXED: Added null checks inside map and filter
+		// Added null checks inside map and filter
 		const groupObjects = group.objectIds
 			.map(id => this.manager.placedObjects.find(o => o && o.id === id))
 			.filter(Boolean);
@@ -296,7 +296,6 @@ export class TreeView {
 		const item = document.createElement('div');
 		item.className = 'tree-item';
 		
-		// NEW: Hidden State
 		if (obj.isVisible === false) {
 			item.classList.add('hidden-item');
 		}
@@ -310,7 +309,7 @@ export class TreeView {
 			e.dataTransfer.effectAllowed = 'move';
 		});
 		
-		// NEW: Visibility Icon
+		// Visibility Icon
 		const visIcon = document.createElement('span');
 		visIcon.className = 'tree-vis-icon';
 		visIcon.innerText = (obj.isVisible === false) ? '✕' : '👁';
