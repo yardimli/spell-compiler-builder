@@ -7,7 +7,7 @@ import { PropertyManager } from './managers/property-manager';
 import { OperationManager } from './managers/operation-manager';
 import { SnapManager } from './managers/snap-manager';
 import { LightManager } from './managers/light-manager';
-import { AssetManager } from './managers/asset-manager'; // Import AssetManager
+import { AssetManager } from './managers/asset-manager';
 
 const LS_AUTOSAVE_KEY = 'builder_autosave_map';
 const LS_SELECTION_KEY = 'builder_selection_state';
@@ -46,7 +46,7 @@ export class ObjectManager {
 		this.onSelectionChange = null;
 		this.onListChange = null;
 		this.onAssetSelectionChange = null;
-		this.onStoreChange = null; // New event for store updates
+		this.onStoreChange = null;
 		
 		// Managers
 		this.undoRedo = new UndoRedoManager(this);
@@ -125,7 +125,7 @@ export class ObjectManager {
 		}
 	}
 	
-	// --- Ghost Logic (Updated to use AssetManager) ---
+	// --- Ghost Logic ---
 	loadGhostAsset (assetName) {
 		this.clearGhost();
 		
@@ -178,7 +178,6 @@ export class ObjectManager {
 		
 		if (this.selectedMeshes.length === 1) {
 			const mesh = this.selectedMeshes[0];
-			// Check if selected object matches current asset name
 			const objData = this.placedObjects.find(o => o.id === mesh.metadata.id);
 			if (objData && objData.assetName === this.activeAssetName) {
 				shouldCopy = true;
@@ -310,7 +309,7 @@ export class ObjectManager {
 		}
 	}
 	
-	// --- Add Asset (Modified to use Store) ---
+	// --- Add Asset ---
 	async addAsset (assetName, explicitPosition = null) {
 		try {
 			// Instantiate from store
@@ -376,14 +375,19 @@ export class ObjectManager {
 				root.position = new BABYLON.Vector3(targetX, baseY + heightOffset + this.defaultYOffset, targetZ);
 			}
 			
-			// Metadata now references assetName instead of file
 			root.metadata = { id: id, isObject: true, assetName: assetName };
 			
 			const descendants = root.getChildMeshes(false);
 			descendants.push(root);
 			
 			descendants.forEach(m => {
-				this.builderScene.registerShadowCaster(m);
+				// Register shadow caster (handle Instances)
+				if (m instanceof BABYLON.InstancedMesh) {
+					this.builderScene.registerShadowCaster(m.sourceMesh);
+				} else {
+					this.builderScene.registerShadowCaster(m);
+				}
+				
 				m.receiveShadows = true;
 				m.isPickable = true;
 				if (m !== root) m.parent = root;
@@ -392,7 +396,7 @@ export class ObjectManager {
 			const objData = {
 				id: id,
 				name: uniqueName,
-				assetName: assetName, // Reference to store
+				assetName: assetName,
 				type: 'mesh',
 				isLocked: false,
 				color: null,
@@ -415,9 +419,10 @@ export class ObjectManager {
 		}
 	}
 	
-	// --- Add Grid (Modified to use Store) ---
+	// --- Add Grid (Optimized for Instances) ---
 	async addAssetGrid (assetName, position, rows, cols) {
 		try {
+			// Create first instance/clone to serve as a template for the grid
 			const root = this.assetManager.instantiate(assetName);
 			if (!root) return;
 			
@@ -429,6 +434,19 @@ export class ObjectManager {
 			const addedObjectsData = [];
 			const startX = position.x - (width * cols) / 2 + width / 2;
 			const startZ = position.z - (depth * rows) / 2 + depth / 2;
+			
+			// Pre-register shadow casters for the source mesh once
+			// This avoids 900x calls to registerShadowCaster which iterates all shadow generators
+			const descendants = root.getChildMeshes(false);
+			if (root instanceof BABYLON.Mesh) descendants.push(root);
+			
+			descendants.forEach(m => {
+				if (m instanceof BABYLON.InstancedMesh) {
+					this.builderScene.registerShadowCaster(m.sourceMesh);
+				} else {
+					this.builderScene.registerShadowCaster(m);
+				}
+			});
 			
 			const setupMesh = (mesh, r, c) => {
 				const id = BABYLON.Tools.RandomId();
@@ -444,11 +462,12 @@ export class ObjectManager {
 				
 				mesh.metadata = { id: id, isObject: true, assetName: assetName };
 				
-				const descendants = mesh.getChildMeshes(false);
-				if (mesh instanceof BABYLON.Mesh) descendants.push(mesh);
+				// Configure children (picking, shadows)
+				// We already registered shadow casters for the source above
+				const meshDescendants = mesh.getChildMeshes(false);
+				if (mesh instanceof BABYLON.Mesh) meshDescendants.push(mesh);
 				
-				descendants.forEach(m => {
-					this.builderScene.registerShadowCaster(m);
+				meshDescendants.forEach(m => {
 					m.receiveShadows = true;
 					m.isPickable = true;
 				});
@@ -471,25 +490,27 @@ export class ObjectManager {
 				return mesh;
 			};
 			
+			// Setup the first one
 			setupMesh(root, 0, 0);
 			
 			for (let r = 0; r < rows; r++) {
 				for (let c = 0; c < cols; c++) {
 					if (r === 0 && c === 0) continue;
-					// Use instantiate for clones too to ensure clean state, or clone the root
-					const clone = root.instantiateHierarchy();
-					// Reset transforms on clone before positioning
-					clone.rotation = BABYLON.Vector3.Zero();
-					clone.scaling = BABYLON.Vector3.One();
+					
+					// Instantiate a new instance from the AssetManager
+					// This ensures we get a clean instance/clone from the source template
+					// Cloning the 'root' instance works too, but using assetManager is safer for structure
+					const clone = this.assetManager.instantiate(assetName);
+					
 					setupMesh(clone, r, c);
 				}
 			}
 			
 			this.selectedMeshes = [];
-			addedObjectsData.forEach(d => {
-				const m = this.findMeshById(d.id);
-				if (m) this.selectObject(m, true);
-			});
+			// Select all added objects? Maybe too many. Select just the last one or none.
+			// Selecting 900 objects might lag the properties panel.
+			// Let's select none to be safe.
+			this.selectObject(null, false);
 			
 			this.undoRedo.add({ type: 'ADD', data: addedObjectsData });
 			if (this.onListChange) this.onListChange();
@@ -598,7 +619,6 @@ export class ObjectManager {
 		};
 	}
 	
-	// Modified to handle Asset Store instantiation
 	async restoreObject (data) {
 		if (data.type === 'light') {
 			const { mesh, light } = this.lightManager.createLight(data.kind, BABYLON.Vector3.FromArray(data.position), data.name);
@@ -626,11 +646,6 @@ export class ObjectManager {
 			
 		} else {
 			// Mesh Object
-			// Ensure asset is in store. If not, we might fail or need to lazy load (not implemented here for simplicity)
-			// For now, we assume the map loader has pre-populated the store.
-			
-			// Fallback: If assetName is missing (old map), try to use 'file' to find/add to store?
-			// This implementation assumes 'assetName' exists in data and in store.
 			const assetName = data.assetName;
 			
 			const root = this.assetManager.instantiate(assetName);
@@ -651,7 +666,12 @@ export class ObjectManager {
 			descendants.push(root);
 			
 			descendants.forEach(m => {
-				this.builderScene.registerShadowCaster(m);
+				if (m instanceof BABYLON.InstancedMesh) {
+					this.builderScene.registerShadowCaster(m.sourceMesh);
+				} else {
+					this.builderScene.registerShadowCaster(m);
+				}
+				
 				m.receiveShadows = true;
 				m.isPickable = true;
 				if (m !== root) m.parent = root;
@@ -779,15 +799,14 @@ export class ObjectManager {
 			this.scene.lights.find(l => l.metadata && l.metadata.id === id);
 	}
 	
-	// Updated to include Asset Store definitions
 	getMapData (mapName) {
 		// Get all assets currently in the store
 		const storeDefinitions = this.assetManager.getAllAssets();
 		
 		return {
 			name: mapName,
-			version: 3, // Bump version
-			assetStore: storeDefinitions, // Save the store definitions
+			version: 3,
+			assetStore: storeDefinitions,
 			assets: this.placedObjects,
 			groups: this.groups
 		};
@@ -835,7 +854,6 @@ export class ObjectManager {
 	}
 	
 	clearScene () {
-		// Keep the asset store, just clear placed objects
 		const currentStore = this.assetManager.getAllAssets();
 		this.loadMapData({ assetStore: currentStore, assets: [], groups: [] });
 	}

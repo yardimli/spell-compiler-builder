@@ -12,7 +12,7 @@ export class AssetManager {
 	
 	/**
 	 * Loads an asset from a file and stores it as a template.
-	 * The template mesh is disabled and hidden.
+	 * The template mesh is enabled but hidden, to allow Instances.
 	 * @param {string} name - Unique name for the asset in the store
 	 * @param {string} file - File path relative to ASSET_ROOT (e.g. "nature/rock.glb")
 	 * @param {string} thumbnail - URL to thumbnail image
@@ -30,15 +30,28 @@ export class AssetManager {
 			
 			// Configure template mesh
 			root.name = `TEMPLATE_${name}`;
-			root.setEnabled(false); // Hide it
+			
+			// OPTIMIZATION: Use Instances
+			// For Instances to work, the master mesh must be Enabled.
+			// We hide it using isVisible = false.
+			root.setEnabled(true);
 			
 			// Ensure world matrix is computed for bounds
 			root.computeWorldMatrix(true);
-			result.meshes.forEach(m => {
+			
+			// Configure all meshes in the hierarchy
+			const descendants = root.getChildMeshes(false);
+			if (root instanceof BABYLON.Mesh) descendants.push(root);
+			
+			descendants.forEach(m => {
+				m.isVisible = false; // Hide the template
 				m.isPickable = false;
 				m.checkCollisions = false;
-				m.receiveShadows = true; // Default settings
+				m.receiveShadows = true; // Default settings for source
 				m.computeWorldMatrix(true);
+				
+				// Freeze world matrix of template to save CPU, as it never moves
+				m.freezeWorldMatrix();
 			});
 			
 			// Store it
@@ -71,9 +84,9 @@ export class AssetManager {
 	
 	/**
 	 * Creates a new instance of the asset in the scene.
-	 * Uses instantiateHierarchy for efficient cloning.
+	 * Uses InstancedMesh for geometry sharing to optimize memory.
 	 * @param {string} name - Asset name
-	 * @returns {BABYLON.Mesh} The new root mesh
+	 * @returns {BABYLON.Mesh|BABYLON.TransformNode} The new root
 	 */
 	instantiate (name) {
 		const asset = this.store.get(name);
@@ -82,20 +95,69 @@ export class AssetManager {
 			return null;
 		}
 		
-		// Clone the template
-		const newRoot = asset.root.instantiateHierarchy();
-		newRoot.setEnabled(true);
-		newRoot.name = name;
+		// Create hierarchy using Instances
+		const newRoot = this._instantiateNode(asset.root);
 		
-		// Reset transform (instantiateHierarchy copies world transform)
-		newRoot.position = BABYLON.Vector3.Zero();
-		newRoot.rotation = BABYLON.Vector3.Zero();
-		newRoot.scaling = BABYLON.Vector3.One();
-		
-		// Ensure metadata exists
-		if (!newRoot.metadata) newRoot.metadata = {};
+		if (newRoot) {
+			newRoot.name = name;
+			
+			// Reset transform
+			newRoot.position = BABYLON.Vector3.Zero();
+			newRoot.rotation = BABYLON.Vector3.Zero();
+			newRoot.scaling = BABYLON.Vector3.One();
+			
+			// Ensure metadata exists
+			if (!newRoot.metadata) newRoot.metadata = {};
+		}
 		
 		return newRoot;
+	}
+	
+	/**
+	 * Recursively instantiates nodes.
+	 * Meshes become InstancedMeshes (if they have geometry).
+	 * TransformNodes/Empty Meshes become Clones.
+	 */
+	_instantiateNode (node, parent = null) {
+		let newNode;
+		
+		// FIX: Only create instances for meshes WITH geometry.
+		// Empty meshes (like __root__) must be cloned, otherwise Babylon throws "Instances should only be created for meshes with geometry".
+		if (node instanceof BABYLON.Mesh && node.geometry) {
+			// Create Instance
+			newNode = node.createInstance(node.name + "_i");
+			newNode.isVisible = true;
+			newNode.checkCollisions = false;
+		} else {
+			// Clone TransformNode, Light, Camera, or Empty Mesh
+			// FIX: Pass 'true' (doNotCloneChildren) to prevent exponential duplication logic
+			// because we are manually recursing children below.
+			if (node instanceof BABYLON.Mesh || node instanceof BABYLON.TransformNode) {
+				newNode = node.clone(node.name + "_c", parent, true);
+			} else {
+				// Fallback for types that might not support doNotCloneChildren arg (though most Nodes do)
+				newNode = node.clone(node.name + "_c", parent);
+			}
+			
+			// Ensure the clone is visible/enabled (since template might be hidden)
+			if (newNode) {
+				if (newNode.setEnabled) newNode.setEnabled(true);
+				if (newNode.isVisible !== undefined) newNode.isVisible = true;
+				// Unfreeze world matrix if template was frozen, so the clone can move
+				if (newNode.unfreezeWorldMatrix) newNode.unfreezeWorldMatrix();
+			}
+		}
+		
+		if (newNode) {
+			newNode.parent = parent;
+			
+			// Recurse children manually
+			node.getChildren().forEach(child => {
+				this._instantiateNode(child, newNode);
+			});
+		}
+		
+		return newNode;
 	}
 	
 	/**

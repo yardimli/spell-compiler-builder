@@ -116,7 +116,12 @@ export class BuilderScene {
 					descendants.push(mesh);
 					descendants.forEach(m => {
 						if (m.isEnabled() && !m.metadata?.isGhost) {
-							sg.addShadowCaster(m, true);
+							// Handle Instances: Register source mesh
+							if (m instanceof BABYLON.InstancedMesh) {
+								this.registerShadowCaster(m.sourceMesh);
+							} else {
+								this.registerShadowCaster(m);
+							}
 						}
 					});
 				}
@@ -133,12 +138,18 @@ export class BuilderScene {
 	}
 	
 	registerShadowCaster (mesh) {
+		if (!mesh) return;
 		this.shadowGenerators.forEach(sg => {
-			sg.addShadowCaster(mesh, true);
+			// Avoid adding duplicates
+			const renderList = sg.getShadowMap().renderList;
+			if (renderList && renderList.indexOf(mesh) === -1) {
+				sg.addShadowCaster(mesh, true);
+			}
 		});
 	}
 	
 	unregisterShadowCaster (mesh) {
+		if (!mesh) return;
 		this.shadowGenerators.forEach(sg => {
 			sg.removeShadowCaster(mesh, true);
 		});
@@ -418,12 +429,13 @@ export class BuilderScene {
 		
 		if (pick.hit) {
 			// Check if we are in "Placement Mode" (an asset is selected in sidebar)
-			if (this.objectManager.activeAssetFile) {
+			// FIX: Use activeAssetName instead of activeAssetFile
+			if (this.objectManager.activeAssetName) {
 				// Use the Ghost Position calculated during PointerMove
 				const targetPosition = this.objectManager.ghostPosition.clone();
 				
 				// Place the asset using the calculated ghost position
-				this.objectManager.addAsset(this.objectManager.activeAssetFile, targetPosition);
+				this.objectManager.addAsset(this.objectManager.activeAssetName, targetPosition);
 				
 				// Stop processing (don't select the object underneath)
 				return;
@@ -494,7 +506,8 @@ export class BuilderScene {
 		}
 		
 		// 2. Ghost Asset Movement
-		if (this.objectManager.activeAssetFile) {
+		// FIX: Use activeAssetName instead of activeAssetFile
+		if (this.objectManager.activeAssetName) {
 			// Force a pick to ensure we get the ground even if the event pick was swallowed or blocked
 			// We filter out the ghost mesh explicitly to be safe
 			const pick = this.scene.pick(
