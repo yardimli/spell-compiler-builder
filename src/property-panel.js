@@ -10,6 +10,10 @@ export class PropertyPanel {
 		this.multiView = document.getElementById('multi-obj-props');
 		this.multiList = document.getElementById('multi-select-container');
 		
+		// Light Containers
+		this.lightProps = document.getElementById('light-props');
+		this.lightDirProps = document.getElementById('light-direction-props');
+		
 		// Gizmo Buttons
 		this.gizmoBtns = {
 			pos: document.getElementById('btnGizmoPos'),
@@ -47,6 +51,14 @@ export class PropertyPanel {
 				x: getEl('scaleX'),
 				y: getEl('scaleY'),
 				z: getEl('scaleZ')
+			},
+			// Light Inputs
+			intensity: getEl('propIntensity'),
+			castShadows: getEl('propCastShadows'),
+			direction: {
+				x: getEl('lightDirX'),
+				y: getEl('lightDirY'),
+				z: getEl('lightDirZ')
 			}
 		};
 		
@@ -191,6 +203,38 @@ export class PropertyPanel {
 			if (this.inputs.scale[axis]) this.inputs.scale[axis].onchange = () => this.emitTransformChange('scaling');
 		});
 		
+		// Light Properties
+		if (this.inputs.intensity) {
+			this.inputs.intensity.onchange = (e) => {
+				if (this.currentObjectId) {
+					this.objectManager.updateObjectProperty(this.currentObjectId, 'intensity', parseFloat(e.target.value));
+				}
+			};
+		}
+		
+		if (this.inputs.castShadows) {
+			this.inputs.castShadows.onchange = (e) => {
+				if (this.currentObjectId) {
+					this.objectManager.updateObjectProperty(this.currentObjectId, 'castShadows', e.target.checked);
+				}
+			};
+		}
+		
+		['x', 'y', 'z'].forEach(axis => {
+			if (this.inputs.direction[axis]) {
+				this.inputs.direction[axis].onchange = () => {
+					if (this.currentObjectId) {
+						const val = {
+							x: parseFloat(this.inputs.direction.x.value) || 0,
+							y: parseFloat(this.inputs.direction.y.value) || 0,
+							z: parseFloat(this.inputs.direction.z.value) || 0
+						};
+						this.objectManager.updateObjectProperty(this.currentObjectId, 'direction', val);
+					}
+				};
+			}
+		});
+		
 		// Alignment
 		if (this.alignButtons.xMin) this.alignButtons.xMin.onclick = () => this.objectManager.alignSelection('x', 'min');
 		if (this.alignButtons.xCenter) this.alignButtons.xCenter.onclick = () => this.objectManager.alignSelection('x', 'center');
@@ -309,6 +353,27 @@ export class PropertyPanel {
 			if (this.inputs.scale.x) this.inputs.scale.x.value = parseFloat(data.scaling[0]).toFixed(2);
 			if (this.inputs.scale.y) this.inputs.scale.y.value = parseFloat(data.scaling[1]).toFixed(2);
 			if (this.inputs.scale.z) this.inputs.scale.z.value = parseFloat(data.scaling[2]).toFixed(2);
+			
+			// Light Properties
+			if (data.type === 'light') {
+				this.lightProps.style.display = 'block';
+				if (this.inputs.intensity) this.inputs.intensity.value = data.intensity !== undefined ? data.intensity : 1.0;
+				if (this.inputs.castShadows) this.inputs.castShadows.checked = !!data.castShadows;
+				
+				if (data.kind === 'directional') {
+					this.lightDirProps.style.display = 'block';
+					if (data.direction) {
+						if (this.inputs.direction.x) this.inputs.direction.x.value = data.direction[0];
+						if (this.inputs.direction.y) this.inputs.direction.y.value = data.direction[1];
+						if (this.inputs.direction.z) this.inputs.direction.z.value = data.direction[2];
+					}
+				} else {
+					this.lightDirProps.style.display = 'none';
+				}
+			} else {
+				this.lightProps.style.display = 'none';
+			}
+			
 		} else {
 			// MULTI SELECTION
 			this.panel.style.visibility = 'visible';
@@ -316,6 +381,7 @@ export class PropertyPanel {
 			
 			this.singleView.style.display = 'none';
 			this.multiView.style.display = 'block';
+			this.lightProps.style.display = 'none'; // Hide light props in multi-select
 			
 			this.currentObjectId = null;
 			

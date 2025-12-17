@@ -67,11 +67,6 @@ export class ObjectManager {
 		this.gizmoController.updateGizmoSettings();
 	}
 	
-	// Getter for shadowGenerator from BuilderScene
-	get shadowGenerator () {
-		return this.builderScene.shadowGenerator;
-	}
-	
 	// --- Gizmo Delegation ---
 	get gizmoManager () { return this.gizmoController.gizmoManager; }
 	setGizmoMode (mode) { this.gizmoController.setMode(mode); }
@@ -162,9 +157,8 @@ export class ObjectManager {
 				m.isPickable = false;
 				m.checkCollisions = false;
 				m.visibility = 0.5;
-				if (this.shadowGenerator) {
-					this.shadowGenerator.removeShadowCaster(m);
-				}
+				// Remove from any shadow generators if automatically added (unlikely but safe)
+				this.builderScene.unregisterShadowCaster(m);
 				m.receiveShadows = false;
 				if (!m.metadata) m.metadata = {};
 				m.metadata.isGhost = true;
@@ -410,9 +404,9 @@ export class ObjectManager {
 			root.metadata = { id: id, isObject: true, file: filename };
 			
 			result.meshes.forEach(m => {
-				if (this.shadowGenerator) {
-					this.shadowGenerator.addShadowCaster(m, true);
-				}
+				// Register with all active shadow generators
+				this.builderScene.registerShadowCaster(m);
+				
 				m.receiveShadows = true;
 				m.isPickable = true;
 				if (m !== root) m.parent = root;
@@ -477,9 +471,9 @@ export class ObjectManager {
 				mesh.metadata = { id: id, isObject: true, file: filename };
 				
 				mesh.getChildMeshes(false).forEach(m => {
-					if (this.shadowGenerator) {
-						this.shadowGenerator.addShadowCaster(m, true);
-					}
+					// Register with all active shadow generators
+					this.builderScene.registerShadowCaster(m);
+					
 					m.receiveShadows = true;
 					m.isPickable = true;
 				});
@@ -552,11 +546,13 @@ export class ObjectManager {
 			type: 'light',
 			kind: 'point',
 			isLocked: false,
-			isVisible: true, // NEW
+			isVisible: true,
 			color: null,
 			position: sphere.position.asArray(),
 			rotation: [0, 0, 0],
-			scaling: [1, 1, 1]
+			scaling: [1, 1, 1],
+			intensity: 0.5,
+			castShadows: false
 		};
 		
 		this.placedObjects.push(objData);
@@ -573,6 +569,18 @@ export class ObjectManager {
 		}
 		
 		if (mesh) {
+			// If it was a shadow caster, remove it from all generators
+			if (mesh.metadata && mesh.metadata.type !== 'light') {
+				const descendants = mesh.getChildMeshes(false);
+				descendants.push(mesh);
+				descendants.forEach(m => this.builderScene.unregisterShadowCaster(m));
+			}
+			
+			// If it was a light casting shadows, disable shadows
+			if (mesh.metadata && mesh.metadata.type === 'light') {
+				this.builderScene.disableShadows(id);
+			}
+			
 			if (clearSelection) {
 				this.selectedMeshes = this.selectedMeshes.filter(m => m !== mesh);
 				this.updateSelectionProxy();
@@ -597,7 +605,8 @@ export class ObjectManager {
 			direction: [-1, -2, -1],
 			rotation: [0, 0, 0],
 			scaling: [1, 1, 1],
-			intensity: 1.0
+			intensity: 1.0,
+			castShadows: true // Default sun casts shadows
 		};
 	}
 	
@@ -625,8 +634,10 @@ export class ObjectManager {
 					light.diffuse = BABYLON.Color3.FromHexString(data.color);
 				}
 				
-				// Setup Shadows via BuilderScene
-				this.builderScene.setupShadows(light);
+				// Restore Shadow State
+				if (data.castShadows) {
+					this.builderScene.enableShadows(sphere);
+				}
 				
 				// Visibility
 				if (data.isVisible === false) {
@@ -651,10 +662,13 @@ export class ObjectManager {
 				
 				// Create Light as Child
 				const light = new BABYLON.PointLight(data.name, BABYLON.Vector3.Zero(), this.scene);
-				light.intensity = 0.5;
+				light.intensity = data.intensity !== undefined ? data.intensity : 0.5;
 				light.parent = sphere;
 				
-				this.builderScene.setupShadows(light);
+				// Restore Shadow State
+				if (data.castShadows) {
+					this.builderScene.enableShadows(sphere);
+				}
 				
 				// Visibility
 				if (data.isVisible === false) {
@@ -677,9 +691,9 @@ export class ObjectManager {
 				if (data.isVisible === false) root.setEnabled(false);
 				
 				res.meshes.forEach(m => {
-					if (this.shadowGenerator) {
-						this.shadowGenerator.addShadowCaster(m, true);
-					}
+					// Register with all active shadow generators
+					this.builderScene.registerShadowCaster(m);
+					
 					m.receiveShadows = true;
 					m.isPickable = true;
 					if (m !== root) m.parent = root;

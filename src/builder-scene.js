@@ -8,7 +8,7 @@ export class BuilderScene {
 		this.engine = null;
 		this.scene = null;
 		this.camera = null;
-		this.shadowGenerator = null;
+		this.shadowGenerators = new Map(); // Map<LightID, ShadowGenerator>
 		this.groundMesh = null;
 		
 		this.objectManager = null;
@@ -82,19 +82,60 @@ export class BuilderScene {
 		return [];
 	}
 	
-	// Helper to setup the shadow generator for a specific light (called by ObjectManager)
-	setupShadows (light) {
-		if (this.shadowGenerator) {
-			this.shadowGenerator.dispose();
-		}
+	// --- Shadow Management ---
+	
+	enableShadows (lightMesh) {
+		// lightMesh is the Gizmo Sphere (root), the actual light is the child
+		const light = lightMesh.getChildren().find(c => c instanceof BABYLON.Light);
+		if (!light) return;
 		
-		this.shadowGenerator = new BABYLON.ShadowGenerator(2048, light);
-		// Use PCF for softer shadows if available, otherwise BlurExponential
-		this.shadowGenerator.usePercentageCloserFiltering = true;
-		this.shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_HIGH;
-		// Ensure objects cast shadows on each other properly
-		this.shadowGenerator.transparencyShadow = true;
-		this.shadowGenerator.bias = 0.0001; // Small bias to prevent acne
+		const id = lightMesh.metadata.id;
+		if (this.shadowGenerators.has(id)) return;
+		
+		const sg = new BABYLON.ShadowGenerator(2048, light);
+		sg.usePercentageCloserFiltering = true;
+		sg.filteringQuality = BABYLON.ShadowGenerator.QUALITY_HIGH;
+		sg.transparencyShadow = true;
+		sg.bias = 0.0001;
+		
+		this.shadowGenerators.set(id, sg);
+		
+		// Add all existing objects to this new generator
+		this.objectManager.placedObjects.forEach(obj => {
+			if (obj.type === 'mesh') {
+				const mesh = this.objectManager.findMeshById(obj.id);
+				if (mesh) {
+					// Add mesh and children
+					const descendants = mesh.getChildMeshes(false);
+					descendants.push(mesh);
+					descendants.forEach(m => {
+						if (m.isEnabled() && !m.metadata?.isGhost) {
+							sg.addShadowCaster(m, true);
+						}
+					});
+				}
+			}
+		});
+	}
+	
+	disableShadows (lightId) {
+		const sg = this.shadowGenerators.get(lightId);
+		if (sg) {
+			sg.dispose();
+			this.shadowGenerators.delete(lightId);
+		}
+	}
+	
+	registerShadowCaster (mesh) {
+		this.shadowGenerators.forEach(sg => {
+			sg.addShadowCaster(mesh, true);
+		});
+	}
+	
+	unregisterShadowCaster (mesh) {
+		this.shadowGenerators.forEach(sg => {
+			sg.removeShadowCaster(mesh, true);
+		});
 	}
 	
 	// --- Camera Locking ---

@@ -24,6 +24,34 @@ export class PropertyManager {
 			return;
 		}
 		
+		// Light Properties
+		if (prop === 'intensity') {
+			const light = mesh.getChildren().find(c => c instanceof BABYLON.Light);
+			if (light) light.intensity = value;
+			objData.intensity = value;
+			return;
+		}
+		
+		if (prop === 'castShadows') {
+			if (value) {
+				this.om.builderScene.enableShadows(mesh);
+			} else {
+				this.om.builderScene.disableShadows(id);
+			}
+			objData.castShadows = value;
+			return;
+		}
+		
+		if (prop === 'direction') {
+			// value is {x, y, z}
+			const light = mesh.getChildren().find(c => c instanceof BABYLON.DirectionalLight);
+			if (light) {
+				light.direction = new BABYLON.Vector3(value.x, value.y, value.z);
+				objData.direction = [value.x, value.y, value.z];
+			}
+			return;
+		}
+		
 		const oldData = {
 			position: mesh.absolutePosition.asArray(),
 			rotation: mesh.absoluteRotationQuaternion.toEulerAngles().asArray(),

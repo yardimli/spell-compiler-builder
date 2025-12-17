@@ -104,7 +104,9 @@ export class OperationManager {
 				if (newRoot instanceof BABYLON.Mesh) descendants.push(newRoot);
 				
 				descendants.forEach(m => {
-					this.om.shadowGenerator.addShadowCaster(m, true);
+					// Register with all active shadow generators
+					this.om.builderScene.registerShadowCaster(m);
+					
 					m.receiveShadows = true;
 					m.isPickable = true;
 					

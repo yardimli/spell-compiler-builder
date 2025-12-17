@@ -139,6 +139,36 @@
 					</div>
 				</div>
 				
+				<!-- Light Properties (New Section) -->
+				<div id="light-props" style="display: none; border-top: 1px solid #34495e; margin-top: 5px; padding-top: 5px;">
+					<label style="color: #f1c40f; font-weight: bold; margin-bottom: 5px; display: block;">Light Properties</label>
+					
+					<div class="prop-group">
+						<div class="control-row">
+							<span>Intensity:</span>
+							<input type="number" id="propIntensity" step="0.1" min="0">
+						</div>
+					</div>
+					
+					<div class="prop-group">
+						<div class="control-row" style="justify-content: flex-start;">
+							<input type="checkbox" id="propCastShadows" style="width: auto; margin-right: 8px;">
+							<label for="propCastShadows" style="margin: 0; cursor: pointer; color: white;">Cast Shadows</label>
+						</div>
+					</div>
+					
+					<div id="light-direction-props" style="display: none;">
+						<div class="prop-group">
+							<label>Direction</label>
+							<div class="prop-row compact">
+								<div class="input-col"><span>X</span><input type="number" id="lightDirX" step="0.1"></div>
+								<div class="input-col"><span>Y</span><input type="number" id="lightDirY" step="0.1"></div>
+								<div class="input-col"><span>Z</span><input type="number" id="lightDirZ" step="0.1"></div>
+							</div>
+						</div>
+					</div>
+				</div>
+				
 				<!-- Multi Object View -->
 				<div id="multi-obj-props" style="display: none;">
 					<!-- Multi-Select Color Control -->
