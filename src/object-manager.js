@@ -5,7 +5,8 @@ import { GroupManager } from './managers/group-manager';
 import { AlignmentManager } from './managers/alignment-manager';
 import { PropertyManager } from './managers/property-manager';
 import { OperationManager } from './managers/operation-manager';
-import { SnapManager } from './managers/snap-manager'; // NEW
+import { SnapManager } from './managers/snap-manager';
+import { LightManager } from './managers/light-manager';
 
 // Updated root path for assets
 const ASSET_ROOT = './assets/objects/';
@@ -58,7 +59,8 @@ export class ObjectManager {
 		this.alignmentManager = new AlignmentManager(this);
 		this.propertyManager = new PropertyManager(this);
 		this.operationManager = new OperationManager(this);
-		this.snapManager = new SnapManager(this); // NEW
+		this.snapManager = new SnapManager(this);
+		this.lightManager = new LightManager(this);
 	}
 	
 	get gridSize () { return this._gridSize; }
@@ -519,44 +521,39 @@ export class ObjectManager {
 		}
 	}
 	
-	addLight (position) {
+	// Modified to accept type
+	addLight (type = 'point', position = null) {
+		const pos = position || this.builderScene.selectedCellPosition || new BABYLON.Vector3(0, 5, 0);
 		const id = BABYLON.Tools.RandomId();
 		const existingLights = this.placedObjects.filter(o => o.type === 'light');
-		const name = `Light_${existingLights.length + 1}`;
+		const name = `Light_${type}_${existingLights.length + 1}`;
 		
-		// 1. Create Gizmo Sphere (The Root Object)
-		// This sphere acts as the handle for the light, ensuring Gizmos work correctly (as they require a Mesh)
-		const sphere = BABYLON.MeshBuilder.CreateSphere(name + '_gizmo', { diameter: 0.5 }, this.scene);
-		sphere.position = new BABYLON.Vector3(position.x, 5 + this.defaultYOffset, position.z);
-		sphere.material = new BABYLON.StandardMaterial('lm', this.scene);
-		sphere.material.emissiveColor = new BABYLON.Color3(1, 1, 0);
-		sphere.isPickable = true;
+		// Delegate to LightManager
+		const { mesh, light } = this.lightManager.createLight(type, new BABYLON.Vector3(pos.x, pos.y + 5, pos.z), name);
 		
-		// Metadata goes on Sphere
-		sphere.metadata = { id: id, isObject: true, type: 'light', kind: 'point' };
-		
-		// 2. Create Light (Child)
-		const light = new BABYLON.PointLight(name, BABYLON.Vector3.Zero(), this.scene);
-		light.intensity = 0.5;
-		light.parent = sphere;
+		// Add Metadata
+		mesh.metadata = { id: id, isObject: true, type: 'light', kind: type };
 		
 		const objData = {
 			id: id,
 			name: name,
 			type: 'light',
-			kind: 'point',
+			kind: type,
 			isLocked: false,
 			isVisible: true,
-			color: null,
-			position: sphere.position.asArray(),
-			rotation: [0, 0, 0],
+			color: light.diffuse.toHexString(), // Diffuse
+			specularColor: light.specular.toHexString(), // Specular
+			groundColor: (type === 'hemispheric') ? light.groundColor.toHexString() : null,
+			position: mesh.position.asArray(),
+			rotation: mesh.rotationQuaternion ? mesh.rotationQuaternion.toEulerAngles().asArray() : mesh.rotation.asArray(),
 			scaling: [1, 1, 1],
-			intensity: 0.5,
-			castShadows: false
+			intensity: light.intensity,
+			castShadows: false,
+			direction: (type !== 'point') ? [light.direction.x, light.direction.y, light.direction.z] : null
 		};
 		
 		this.placedObjects.push(objData);
-		this.selectObject(sphere, false);
+		this.selectObject(mesh, false);
 		this.undoRedo.add({ type: 'ADD', data: [objData] });
 		if (this.onListChange) this.onListChange();
 	}
@@ -601,84 +598,59 @@ export class ObjectManager {
 			isLocked: false,
 			isVisible: true,
 			color: '#ffffff',
+			specularColor: '#ffffff',
 			position: [20, 40, 20],
 			direction: [-1, -2, -1],
-			rotation: [0, 0, 0],
+			rotation: [0, 0, 0], // Will be calculated from direction
 			scaling: [1, 1, 1],
 			intensity: 1.0,
 			castShadows: true // Default sun casts shadows
 		};
 	}
 	
+	createDefaultAmbientLightData () {
+		return {
+			id: 'ambient_sky',
+			name: 'Ambient Sky',
+			type: 'light',
+			kind: 'hemispheric',
+			isLocked: false,
+			isVisible: true,
+			color: '#ffffff',
+			specularColor: '#000000',
+			groundColor: '#333333',
+			position: [0, 10, 0],
+			direction: [0, 1, 0],
+			rotation: [0, 0, 0],
+			scaling: [1, 1, 1],
+			intensity: 0.7,
+			castShadows: false
+		};
+	}
+	
 	restoreObject (data) {
 		if (data.type === 'light') {
-			if (data.kind === 'directional') {
-				// Handle Directional Light (Main Sun)
-				// Create Gizmo Sphere as Root
-				const sphere = BABYLON.MeshBuilder.CreateSphere(data.name + '_gizmo', { diameter: 1.0 }, this.scene);
-				sphere.position = new BABYLON.Vector3(data.position[0], data.position[1], data.position[2]);
-				sphere.metadata = { id: data.id, isObject: true, type: 'light', kind: 'directional' };
-				sphere.isPickable = true;
-				
-				const mat = new BABYLON.StandardMaterial('sunMat', this.scene);
-				mat.emissiveColor = new BABYLON.Color3(1, 0.5, 0); // Orange sun
-				sphere.material = mat;
-				
-				// Create Light as Child
-				const dir = new BABYLON.Vector3(data.direction[0], data.direction[1], data.direction[2]);
-				const light = new BABYLON.DirectionalLight(data.name, dir, this.scene);
-				light.intensity = data.intensity !== undefined ? data.intensity : 1.0;
-				light.parent = sphere;
-				
-				if (data.color) {
-					light.diffuse = BABYLON.Color3.FromHexString(data.color);
-				}
-				
-				// Restore Shadow State
-				if (data.castShadows) {
-					this.builderScene.enableShadows(sphere);
-				}
-				
-				// Visibility
-				if (data.isVisible === false) {
-					sphere.setEnabled(false); // Hides light too since it's child
-				}
-				
-				this.placedObjects.push(data);
-				if (this.onListChange) this.onListChange();
-				return Promise.resolve();
-				
-			} else {
-				// Handle Point Light
-				// Create Gizmo Sphere as Root
-				const sphere = BABYLON.MeshBuilder.CreateSphere(data.name + '_gizmo', { diameter: 0.5 }, this.scene);
-				sphere.position = BABYLON.Vector3.FromArray(data.position);
-				sphere.metadata = { id: data.id, isObject: true, type: 'light', kind: 'point' };
-				sphere.isPickable = true;
-				
-				const mat = new BABYLON.StandardMaterial('lm', this.scene);
-				mat.emissiveColor = new BABYLON.Color3(1, 1, 0);
-				sphere.material = mat;
-				
-				// Create Light as Child
-				const light = new BABYLON.PointLight(data.name, BABYLON.Vector3.Zero(), this.scene);
-				light.intensity = data.intensity !== undefined ? data.intensity : 0.5;
-				light.parent = sphere;
-				
-				// Restore Shadow State
-				if (data.castShadows) {
-					this.builderScene.enableShadows(sphere);
-				}
-				
-				// Visibility
-				if (data.isVisible === false) {
-					sphere.setEnabled(false);
-				}
-				
-				this.placedObjects.push(data);
-				if (this.onListChange) this.onListChange();
-				return Promise.resolve();
+			// Delegate to LightManager
+			const { mesh, light } = this.lightManager.createLight(data.kind, BABYLON.Vector3.FromArray(data.position), data.name);
+			mesh.metadata = { id: data.id, isObject: true, type: 'light', kind: data.kind };
+			
+			// Apply Properties
+			this.lightManager.updateLightProperties(mesh, data);
+			
+			// Restore Shadow State
+			if (data.castShadows) {
+				this.builderScene.enableShadows(mesh);
 			}
+			
+			// Visibility
+			if (data.isVisible === false) {
+				mesh.setEnabled(false);
+			}
+			
+			this.placedObjects.push(data);
+			if (this.onListChange) this.onListChange();
+			return Promise.resolve();
+			
 		} else {
 			return BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, data.file, this.scene).then(res => {
 				const root = res.meshes[0];
@@ -904,29 +876,16 @@ export class ObjectManager {
 		
 		if (this.onListChange) this.onListChange();
 		
-		if (data.assets) {
-			// Handle Main Light Loading
-			// 1. Check for Directional Light
-			let mainLightData = data.assets.find(a => a.type === 'light' && a.kind === 'directional');
-			
-			// 2. If not found, create default data
-			if (!mainLightData) {
-				mainLightData = this.createDefaultMainLightData();
-			}
-			
-			// 3. Restore Main Light FIRST to ensure ShadowGenerator is ready for meshes
-			const otherAssets = data.assets.filter(a => a !== mainLightData);
-			
-			// Restore Main Light
-			await this.restoreObject(mainLightData);
-			
-			// Restore Others
-			const promises = otherAssets.map(item => this.restoreObject(item));
+		if (data.assets && data.assets.length > 0) {
+			// Restore Objects
+			const promises = data.assets.map(item => this.restoreObject(item));
 			await Promise.all(promises);
 		} else {
-			// No assets (e.g. clearScene), add default light
-			const defaultLight = this.createDefaultMainLightData();
-			await this.restoreObject(defaultLight);
+			// No assets (e.g. clearScene), add default lights
+			const defaultSun = this.createDefaultMainLightData();
+			const defaultAmbient = this.createDefaultAmbientLightData();
+			await this.restoreObject(defaultSun);
+			await this.restoreObject(defaultAmbient);
 		}
 	}
 	

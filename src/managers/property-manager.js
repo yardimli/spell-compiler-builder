@@ -19,8 +19,30 @@ export class PropertyManager {
 		}
 		
 		if (prop === 'color') {
-			objData.color = value;
-			this.om.applyColorToMesh(mesh, value);
+			// Check if it's a light
+			if (objData.type === 'light') {
+				const light = mesh.getChildren().find(c => c instanceof BABYLON.Light);
+				if (light) light.diffuse = BABYLON.Color3.FromHexString(value || '#ffffff');
+				objData.color = value;
+			} else {
+				objData.color = value;
+				this.om.applyColorToMesh(mesh, value);
+			}
+			return;
+		}
+		
+		// NEW: Light Properties
+		if (prop === 'specularColor') {
+			const light = mesh.getChildren().find(c => c instanceof BABYLON.Light);
+			if (light) light.specular = BABYLON.Color3.FromHexString(value || '#000000');
+			objData.specularColor = value;
+			return;
+		}
+		
+		if (prop === 'groundColor') {
+			const light = mesh.getChildren().find(c => c instanceof BABYLON.HemisphericLight);
+			if (light) light.groundColor = BABYLON.Color3.FromHexString(value || '#000000');
+			objData.groundColor = value;
 			return;
 		}
 		
@@ -44,10 +66,15 @@ export class PropertyManager {
 		
 		if (prop === 'direction') {
 			// value is {x, y, z}
-			const light = mesh.getChildren().find(c => c instanceof BABYLON.DirectionalLight);
-			if (light) {
+			const light = mesh.getChildren().find(c => c instanceof BABYLON.Light);
+			if (light && (light instanceof BABYLON.DirectionalLight || light instanceof BABYLON.HemisphericLight)) {
 				light.direction = new BABYLON.Vector3(value.x, value.y, value.z);
 				objData.direction = [value.x, value.y, value.z];
+				
+				// Update Gizmo Rotation to match
+				if (light instanceof BABYLON.DirectionalLight) {
+					mesh.lookAt(mesh.position.add(light.direction));
+				}
 			}
 			return;
 		}
@@ -176,7 +203,12 @@ export class PropertyManager {
 				const objData = this.om.placedObjects.find(o => o.id === mesh.metadata.id);
 				if (objData) {
 					objData.color = value;
-					this.om.applyColorToMesh(mesh, value);
+					if (objData.type === 'light') {
+						const light = mesh.getChildren().find(c => c instanceof BABYLON.Light);
+						if (light) light.diffuse = BABYLON.Color3.FromHexString(value);
+					} else {
+						this.om.applyColorToMesh(mesh, value);
+					}
 				}
 			});
 		}

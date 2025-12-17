@@ -13,6 +13,7 @@ export class PropertyPanel {
 		// Light Containers
 		this.lightProps = document.getElementById('light-props');
 		this.lightDirProps = document.getElementById('light-direction-props');
+		this.rowGroundColor = document.getElementById('rowGroundColor');
 		
 		// Gizmo Buttons
 		this.gizmoBtns = {
@@ -55,6 +56,9 @@ export class PropertyPanel {
 			// Light Inputs
 			intensity: getEl('propIntensity'),
 			castShadows: getEl('propCastShadows'),
+			lightDiffuse: getEl('propLightDiffuse'),
+			lightSpecular: getEl('propLightSpecular'),
+			lightGround: getEl('propLightGround'),
 			direction: {
 				x: getEl('lightDirX'),
 				y: getEl('lightDirY'),
@@ -104,7 +108,7 @@ export class PropertyPanel {
 		}
 	}
 	
-	updateInputSteps() {
+	updateInputSteps () {
 		if (!this.objectManager) return;
 		
 		['x', 'y', 'z'].forEach(axis => {
@@ -131,9 +135,15 @@ export class PropertyPanel {
 			if (e.target.tagName === 'INPUT') return; // Ignore if typing
 			
 			switch (e.key.toLowerCase()) {
-				case 'g': setMode('position', this.gizmoBtns.pos); break;
-				case 'r': setMode('rotation', this.gizmoBtns.rot); break;
-				case 's': setMode('scaling', this.gizmoBtns.scale); break;
+				case 'g':
+					setMode('position', this.gizmoBtns.pos);
+					break;
+				case 'r':
+					setMode('rotation', this.gizmoBtns.rot);
+					break;
+				case 's':
+					setMode('scaling', this.gizmoBtns.scale);
+					break;
 			}
 		});
 	}
@@ -217,6 +227,23 @@ export class PropertyPanel {
 				if (this.currentObjectId) {
 					this.objectManager.updateObjectProperty(this.currentObjectId, 'castShadows', e.target.checked);
 				}
+			};
+		}
+		
+		// Light Colors
+		if (this.inputs.lightDiffuse) {
+			this.inputs.lightDiffuse.onchange = (e) => {
+				if (this.currentObjectId) this.objectManager.updateObjectProperty(this.currentObjectId, 'color', e.target.value);
+			};
+		}
+		if (this.inputs.lightSpecular) {
+			this.inputs.lightSpecular.onchange = (e) => {
+				if (this.currentObjectId) this.objectManager.updateObjectProperty(this.currentObjectId, 'specularColor', e.target.value);
+			};
+		}
+		if (this.inputs.lightGround) {
+			this.inputs.lightGround.onchange = (e) => {
+				if (this.currentObjectId) this.objectManager.updateObjectProperty(this.currentObjectId, 'groundColor', e.target.value);
 			};
 		}
 		
@@ -358,18 +385,41 @@ export class PropertyPanel {
 			if (data.type === 'light') {
 				this.lightProps.style.display = 'block';
 				if (this.inputs.intensity) this.inputs.intensity.value = data.intensity !== undefined ? data.intensity : 1.0;
-				if (this.inputs.castShadows) this.inputs.castShadows.checked = !!data.castShadows;
 				
-				if (data.kind === 'directional') {
+				// Update Cast Shadows Visibility
+				if (this.inputs.castShadows) {
+					this.inputs.castShadows.checked = !!data.castShadows;
+					
+					// Hide shadow option for Hemispheric lights
+					const shadowGroup = this.inputs.castShadows.closest('.prop-group');
+					if (shadowGroup) {
+						shadowGroup.style.display = (data.kind === 'hemispheric') ? 'none' : 'block';
+					}
+				}
+				
+				// Update Color Inputs
+				if (this.inputs.lightDiffuse) this.inputs.lightDiffuse.value = data.color || '#ffffff';
+				if (this.inputs.lightSpecular) this.inputs.lightSpecular.value = data.specularColor || '#000000';
+				
+				if (data.kind === 'directional' || data.kind === 'hemispheric') {
 					this.lightDirProps.style.display = 'block';
 					if (data.direction) {
-						if (this.inputs.direction.x) this.inputs.direction.x.value = data.direction[0];
-						if (this.inputs.direction.y) this.inputs.direction.y.value = data.direction[1];
-						if (this.inputs.direction.z) this.inputs.direction.z.value = data.direction[2];
+						if (this.inputs.direction.x) this.inputs.direction.x.value = parseFloat(data.direction[0]).toFixed(2);
+						if (this.inputs.direction.y) this.inputs.direction.y.value = parseFloat(data.direction[1]).toFixed(2);
+						if (this.inputs.direction.z) this.inputs.direction.z.value = parseFloat(data.direction[2]).toFixed(2);
 					}
 				} else {
 					this.lightDirProps.style.display = 'none';
 				}
+				
+				// Ground Color (Hemispheric Only)
+				if (data.kind === 'hemispheric') {
+					this.rowGroundColor.style.display = 'flex';
+					if (this.inputs.lightGround) this.inputs.lightGround.value = data.groundColor || '#000000';
+				} else {
+					this.rowGroundColor.style.display = 'none';
+				}
+				
 			} else {
 				this.lightProps.style.display = 'none';
 			}

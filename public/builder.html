@@ -50,7 +50,16 @@
 		</div>
 		
 		<div class="menu-group">
-			<button id="btnAddLight" title="Add Point Light">💡 Add Light</button>
+			<!-- Light Dropdown -->
+			<div class="dropdown">
+				<button id="btnAddLightMenu" title="Add Light">💡 Add Light ▼</button>
+				<div class="dropdown-content">
+					<a id="btnAddPointLight">Point Light</a>
+					<a id="btnAddDirLight">Directional Light</a>
+					<a id="btnAddHemiLight">Hemispheric Light</a>
+				</div>
+			</div>
+			
 			<button id="btnClearSelection" class="secondary" title="Clear Asset/Object Selection (Esc)">Clear Selection
 			</button>
 			<button id="btnResetCam" class="secondary">Reset Camera</button>
@@ -150,6 +159,22 @@
 						</div>
 					</div>
 					
+					<!-- Light Colors -->
+					<div class="prop-group">
+						<div class="control-row">
+							<span>Diffuse:</span>
+							<input type="color" id="propLightDiffuse" title="Diffuse Color">
+						</div>
+						<div class="control-row" style="margin-top:4px;">
+							<span>Specular:</span>
+							<input type="color" id="propLightSpecular" title="Specular Color">
+						</div>
+						<div class="control-row" id="rowGroundColor" style="margin-top:4px; display:none;">
+							<span>Ground:</span>
+							<input type="color" id="propLightGround" title="Ground Color (Hemispheric)">
+						</div>
+					</div>
+					
 					<div class="prop-group">
 						<div class="control-row" style="justify-content: flex-start;">
 							<input type="checkbox" id="propCastShadows" style="width: auto; margin-right: 8px;">
@@ -159,7 +184,7 @@
 					
 					<div id="light-direction-props" style="display: none;">
 						<div class="prop-group">
-							<label>Direction</label>
+							<label>Direction (Vector)</label>
 							<div class="prop-row compact">
 								<div class="input-col"><span>X</span><input type="number" id="lightDirX" step="0.1"></div>
 								<div class="input-col"><span>Y</span><input type="number" id="lightDirY" step="0.1"></div>

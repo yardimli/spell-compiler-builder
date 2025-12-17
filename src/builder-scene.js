@@ -89,6 +89,12 @@ export class BuilderScene {
 		const light = lightMesh.getChildren().find(c => c instanceof BABYLON.Light);
 		if (!light) return;
 		
+		// HemisphericLight cannot cast shadows
+		if (light instanceof BABYLON.HemisphericLight) {
+			console.warn('HemisphericLight cannot cast shadows.');
+			return;
+		}
+		
 		const id = lightMesh.metadata.id;
 		if (this.shadowGenerators.has(id)) return;
 		
