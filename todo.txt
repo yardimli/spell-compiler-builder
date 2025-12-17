@@ -1,24 +1,12 @@
 #TODO
 
-#TODO 10
-- when adding a new asset to the scene show a ghost asset under the mouse that should snap to existing assets on all edges, if user clicks on top of the asset on the scene it should be placed above instead.
-- when snapping it should check if the selected asset is the same file as the new one being added and if so it should rotate the new one to match the rotation of the existing one and snap accordingly.
-- when snapping calculate the rotation and scale for the snapping points of both target and ghost align, currently it still calculates the snapping points as if it hadnt been rotated or scaled so the new asset isnt aligning properly with the target
-- add shortcut so del key will delete assets same as the button
-- on the scene objects make the height of the property inspector and tree view start with 50% each, allow user user to change the height with a horizontal splitter, amke it so even if the property inspector is not showing the tree view should not change size.
-- change so every asset can be targeted for snapping to with every other asset with right click
-
-- allow from sidebar treeview to hide/unhide assets and groups. hidden assets or groups should not be rendered.
-- the snap side by side should have a margin setting
-- in settings modal allow user to set minimum increment for position(downto 0.0001), and default position (downto 0.0001), same for rotation and scale, and cursor movement properties
-- in the ui use same color for x,y,x buttons as the arrow colors when moving an asset
-
 #TODO 11
+- add a new js file for managing lights called light-manager.js
 - make light button open a dropdown with Pointlight, DirectionalLight, HemisphericLight
 - add property panel for lights to adjust color diffuse and specular for all 3 types and groundColor for HemisphericLight
 - add property panel for lights to adjust location for Pointlight
 - add property panel for lights to adjust direction for DirectionalLight and HemisphericLight
-- show different simple 3d representations for each light type
+- show different simple 3d representations for each light type on the scene
 - a new scene should have a default light (HemisphericLight)
 
 #TODO 12
@@ -26,6 +14,7 @@
 - allow adding multiple cameras to the scene, allow user to drag, rotate the camera, in properties add fov settings for cameras besides position, direction and rotation.
 - allow user to view scene from different cameras using a dropdown in the top menubar
 - allow user to edit asset colors for individual meshes inside a glb file, if there is a texture file allow to use it, or just use a color tint, show it in an modal for the selected asset where user can see the results.
+- allow to reorder assets in the treeview with drag and drop to change rendering order
 
 
 
@@ -169,3 +158,15 @@ BUG: deleting an asset breaks the tree view with error
 - when one or more objects are selected make the arrow keys move the selection on the x,z planes if the user press shift up/down arrow keys should move it on the y plane. on the top menubar add a small numeric input for cursor increment default is 0.05 with increments in 0.05
 - when panning the camera with ctrl if user press ctrl+shift allow panning in the 3rd axis that it is not panning in
 
+#TODO 10
+- when adding a new asset to the scene show a ghost asset under the mouse that should snap to existing assets on all edges, if user clicks on top of the asset on the scene it should be placed above instead.
+- when snapping it should check if the selected asset is the same file as the new one being added and if so it should rotate the new one to match the rotation of the existing one and snap accordingly.
+- when snapping calculate the rotation and scale for the snapping points of both target and ghost align, currently it still calculates the snapping points as if it hadnt been rotated or scaled so the new asset isnt aligning properly with the target
+- add shortcut so del key will delete assets same as the button
+- on the scene objects make the height of the property inspector and tree view start with 50% each, allow user user to change the height with a horizontal splitter, amke it so even if the property inspector is not showing the tree view should not change size.
+- change so every asset can be targeted for snapping to with every other asset with right click
+
+- allow from sidebar treeview to hide/unhide assets and groups. hidden assets or groups should not be rendered.
+- the snap side by side should have a margin setting
+- in settings modal allow user to set minimum increment for position(downto 0.0001), and default position (downto 0.0001), same for rotation and scale, and cursor movement properties
+- in the ui use same color for x,y,x buttons as the arrow colors when moving an asset

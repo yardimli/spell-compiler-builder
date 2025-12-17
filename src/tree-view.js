@@ -194,7 +194,14 @@ export class TreeView {
 		// NEW: Group Visibility Icon
 		const visIcon = document.createElement('span');
 		visIcon.className = 'tree-vis-icon';
-		visIcon.innerText = '👁';
+		
+		// Determine state: if all hidden -> closed eye, else open eye
+		const allHidden = group.objectIds.every(id => {
+			const obj = this.manager.placedObjects.find(o => o && o.id === id);
+			return obj && (obj.isVisible === false);
+		});
+		
+		visIcon.innerText = allHidden ? '✕' : '👁';
 		visIcon.title = 'Toggle Group Visibility';
 		visIcon.onclick = (e) => {
 			e.stopPropagation();
@@ -229,6 +236,7 @@ export class TreeView {
 		};
 		
 		titleContainer.appendChild(toggleIcon);
+		titleContainer.appendChild(visIcon); // Added visibility icon
 		titleContainer.appendChild(titleSpan);
 		
 		// Actions (Delete)

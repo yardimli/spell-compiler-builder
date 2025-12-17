@@ -83,11 +83,12 @@ export class UndoRedoManager {
 				});
 				break;
 			
-				// NEW: Property Change (Visibility)
+			// NEW: Property Change (Visibility)
 			case 'PROPERTY':
 				action.data.forEach(change => {
 					if (change.prop === 'isVisible') {
-						this.manager.propertyManager.updateVisibility(change.id, change.newValue);
+						// Use setter to avoid adding new history entry
+						this.manager.propertyManager.setObjectVisibility(change.id, change.newValue);
 						// Don't select, just update state
 					}
 				});
@@ -124,7 +125,8 @@ export class UndoRedoManager {
 			case 'PROPERTY':
 				action.data.forEach(change => {
 					if (change.prop === 'isVisible') {
-						this.manager.propertyManager.updateVisibility(change.id, change.oldValue);
+						// Use setter to avoid adding new history entry
+						this.manager.propertyManager.setObjectVisibility(change.id, change.oldValue);
 					}
 				});
 				break;

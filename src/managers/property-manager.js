@@ -69,16 +69,25 @@ export class PropertyManager {
 		});
 	}
 	
-	updateVisibility (id, isVisible) {
+	// Direct setter without history (used by Undo/Redo and internal batches)
+	setObjectVisibility (id, isVisible) {
 		const mesh = this.om.findMeshById(id);
+		const objData = this.om.placedObjects.find(o => o.id === id);
+		
+		if (objData) {
+			objData.isVisible = isVisible;
+			if (mesh) mesh.setEnabled(isVisible);
+		}
+	}
+	
+	updateVisibility (id, isVisible) {
 		const objData = this.om.placedObjects.find(o => o.id === id);
 		
 		if (objData) {
 			const oldValue = objData.isVisible !== undefined ? objData.isVisible : true;
 			
 			// Apply
-			objData.isVisible = isVisible;
-			if (mesh) mesh.setEnabled(isVisible);
+			this.setObjectVisibility(id, isVisible);
 			
 			// Add to Undo
 			this.om.undoRedo.add({
@@ -89,6 +98,37 @@ export class PropertyManager {
 					oldValue: oldValue,
 					newValue: isVisible
 				}]
+			});
+			
+			if (this.om.onListChange) this.om.onListChange();
+		}
+	}
+	
+	// NEW: Batch update for groups to create single undo entry
+	updateVisibilityBatch (ids, isVisible) {
+		const changes = [];
+		
+		ids.forEach(id => {
+			const objData = this.om.placedObjects.find(o => o.id === id);
+			if (objData) {
+				const oldValue = objData.isVisible !== undefined ? objData.isVisible : true;
+				
+				if (oldValue !== isVisible) {
+					this.setObjectVisibility(id, isVisible);
+					changes.push({
+						id: id,
+						prop: 'isVisible',
+						oldValue: oldValue,
+						newValue: isVisible
+					});
+				}
+			}
+		});
+		
+		if (changes.length > 0) {
+			this.om.undoRedo.add({
+				type: 'PROPERTY',
+				data: changes
 			});
 			
 			if (this.om.onListChange) this.om.onListChange();
