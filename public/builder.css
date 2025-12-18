@@ -183,10 +183,6 @@ body, html {
     border-bottom: 1px solid #1a252f;
 }
 
-#asset-list {
-    /* Inherits .sidebar-scroll-area */
-}
-
 .empty-state {
     padding: 20px;
     text-align: center;
@@ -227,14 +223,16 @@ body, html {
     transform: rotate(-90deg);
 }
 
-/* Asset List Container */
-#asset-list {
+/* Asset List Container (Used in Modal now) */
+.browser-grid-container {
     flex: 1;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     position: relative;
     background: #233342;
+    padding: 10px;
+    min-height: 300px;
 }
 
 #asset-load-area {
@@ -273,6 +271,12 @@ body, html {
     padding: 5px;
     background: #233342;
 }
+/* In large modal, show more columns */
+.modal-content.large .category-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+}
+
 .category-grid.hidden { display: none; }
 
 .asset-item {
@@ -325,12 +329,6 @@ body, html {
     z-index: 15;
     box-shadow: -2px 2px 8px rgba(0,0,0,0.3);
 }
-
-#settingsModal button { padding: 6px; cursor: pointer; background: #27ae60; border: none; color: white; border-radius: 4px; margin-bottom: 2px; }
-#settingsModal button:hover { background: #2ecc71; }
-#settingsModal button.secondary { background: #e67e22; }
-#settingsModal button.info { background: #3498db; }
-#settingsModal button:disabled { background: #7f8c8d; cursor: not-allowed; }
 
 /* --- Properties Panel (Merged into Sidebar) --- */
 #properties-panel {
@@ -552,12 +550,36 @@ body, html {
     gap: 10px;
 }
 
-/* General Button Styles (for panels) */
-#properties-panel button { padding: 6px; cursor: pointer; background: #27ae60; border: none; color: white; border-radius: 4px; margin-bottom: 2px; }
-#properties-panel button:hover { background: #2ecc71; }
-#properties-panel button.secondary { background: #e67e22; }
-#properties-panel button.info { background: #3498db; }
-#properties-panel button:disabled { background: #7f8c8d; cursor: not-allowed; }
+/* General Button Styles (for panels and modals) */
+button {
+    padding: 6px;
+    cursor: pointer;
+    background: #34495e;
+    border: none;
+    color: #bdc3c7;
+    border-radius: 4px;
+}
+button:hover:not(:disabled) { background: #3e5871; color: white; }
+button:disabled { background: #2c3e50; opacity: 0.5; cursor: not-allowed; }
+
+/* Specific Button Classes */
+button.info { background: #2980b9; color: white; }
+button.info:hover:not(:disabled) { background: #3498db; }
+
+button.secondary { background: #e67e22; color: white; }
+button.secondary:hover:not(:disabled) { background: #d35400; }
+
+button.danger { background: #c0392b; color: white; }
+button.danger:hover:not(:disabled) { background: #e74c3c; }
+
+button.success { background: #27ae60; color: white; }
+button.success:hover:not(:disabled) { background: #2ecc71; }
+
+/* Apply to Properties Panel specifically to override specific selectors if needed */
+#properties-panel button { margin-bottom: 2px; }
+#properties-panel button:not([class]) { background: #27ae60; color: white; } /* Default prop buttons green */
+#properties-panel button:not([class]):hover { background: #2ecc71; }
+
 
 input[type="text"] { padding: 5px; width: 75%; box-sizing: border-box; background: #ecf0f1; border: 1px solid #bdc3c7; border-radius: 3px; }
 input[type="number"] { padding: 5px; width:100%; max-width: 100px; box-sizing: border-box; background: #ecf0f1; border: 1px solid #bdc3c7; border-radius: 3px; }
@@ -578,11 +600,20 @@ input[type="color"] { width: 30px; height: 30px; border: none; padding: 0; curso
 
 /* Modals & Overlays */
 .modal-overlay { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
-.modal-content { background-color: #2c3e50; color: white; padding: 20px; border: 1px solid #1a252f; border-radius: 5px; width: 600px; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+.modal-content { background-color: #2c3e50; color: white; padding: 20px; border: 1px solid #1a252f; border-radius: 5px; width: 600px; box-shadow: 0 4px 8px rgba(0,0,0,0.3); display: flex; flex-direction: column; }
+.modal-content.large { width: 80%; height: 80%; max-width: 1000px; }
+
 .modal-header { font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #34495e; padding-bottom: 10px; }
 .modal-footer { margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px; }
+
+/* Modal Button Styling Override */
+.modal-content button { padding: 8px 16px; }
+
 .control-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 5px; }
 .control-row { display: flex; gap: 5px; align-items: center; justify-content: space-between; }
+
+/* Add Asset Modal needs higher z-index to appear over File Browser */
+#addAssetModal { z-index: 110; }
 
 #context-menu { display: none; position: absolute; z-index: 1000; width: 150px; background: #2c3e50; border: 1px solid #1a252f; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); border-radius: 4px; overflow: hidden; }
 .ctx-item { padding: 8px 12px; color: white; font-size: 13px; cursor: pointer; border-bottom: 1px solid #34495e; }

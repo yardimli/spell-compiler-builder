@@ -4,7 +4,7 @@ import * as BABYLON from '@babylonjs/core';
 const ASSET_ROOT = './assets/objects/';
 
 export class AssetManager {
-	constructor (scene) {
+	constructor(scene) {
 		this.scene = scene;
 		// Map: name -> { file: string, root: Mesh, thumbnail: string }
 		this.store = new Map();
@@ -17,15 +17,30 @@ export class AssetManager {
 	 * @param {string} file - File path relative to ASSET_ROOT (e.g. "nature/rock.glb")
 	 * @param {string} thumbnail - URL to thumbnail image
 	 */
-	async addToStore (name, file, thumbnail) {
+	async addToStore(name, file, thumbnail) {
 		if (this.store.has(name)) {
 			console.warn(`Asset '${name}' already exists in store.`);
 			return;
 		}
 		
 		try {
+			// Fix: Split file path to ensure textures in subfolders resolve correctly
+			// file is e.g. "nature/rock.glb"
+			// rootUrl becomes "./assets/objects/nature/"
+			// filename becomes "rock.glb"
+			// This ensures relative texture paths in the GLB (e.g. "textures/diffuse.png")
+			// are resolved relative to the GLB's folder, not the ASSET_ROOT.
+			const lastSlashIndex = file.lastIndexOf('/');
+			let rootUrl = ASSET_ROOT;
+			let filename = file;
+			
+			if (lastSlashIndex !== -1) {
+				rootUrl = ASSET_ROOT + file.substring(0, lastSlashIndex + 1);
+				filename = file.substring(lastSlashIndex + 1);
+			}
+			
 			// Load the mesh
-			const result = await BABYLON.SceneLoader.ImportMeshAsync('', ASSET_ROOT, file, this.scene);
+			const result = await BABYLON.SceneLoader.ImportMeshAsync('', rootUrl, filename, this.scene);
 			const root = result.meshes[0];
 			
 			// Configure template mesh
@@ -71,14 +86,14 @@ export class AssetManager {
 	/**
 	 * Checks if an asset exists in the store
 	 */
-	hasAsset (name) {
+	hasAsset(name) {
 		return this.store.has(name);
 	}
 	
 	/**
 	 * Gets the asset definition
 	 */
-	getAsset (name) {
+	getAsset(name) {
 		return this.store.get(name);
 	}
 	
@@ -88,7 +103,7 @@ export class AssetManager {
 	 * @param {string} name - Asset name
 	 * @returns {BABYLON.Mesh|BABYLON.TransformNode} The new root
 	 */
-	instantiate (name) {
+	instantiate(name) {
 		const asset = this.store.get(name);
 		if (!asset) {
 			console.error(`Asset '${name}' not found in store.`);
@@ -118,7 +133,7 @@ export class AssetManager {
 	 * Meshes become InstancedMeshes (if they have geometry).
 	 * TransformNodes/Empty Meshes become Clones.
 	 */
-	_instantiateNode (node, parent = null) {
+	_instantiateNode(node, parent = null) {
 		let newNode;
 		
 		// FIX: Only create instances for meshes WITH geometry.
@@ -163,7 +178,7 @@ export class AssetManager {
 	/**
 	 * Returns all assets in the store as an array
 	 */
-	getAllAssets () {
+	getAllAssets() {
 		const list = [];
 		this.store.forEach((value, key) => {
 			list.push({
@@ -178,7 +193,7 @@ export class AssetManager {
 	/**
 	 * Clears the store and disposes template meshes
 	 */
-	clear () {
+	clear() {
 		this.store.forEach(asset => {
 			asset.root.dispose(false, true);
 		});

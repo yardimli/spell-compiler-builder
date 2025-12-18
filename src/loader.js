@@ -13,7 +13,7 @@ const cacheContext = require.context('../assets/cache', true, /\.png$/);
 /**
  * Returns a list of available folder names within assets/objects
  */
-export function getAvailableFolders () {
+export function getAvailableFolders() {
 	const folders = new Set();
 	glbContext.keys().forEach(key => {
 		// key format is usually "./folderName/fileName.glb"
@@ -27,7 +27,7 @@ export function getAvailableFolders () {
 }
 
 // Modified to accept scene, camera, and the specific folder to load
-export async function loadAssets (scene, camera, folderName) {
+export async function loadAssets(scene, camera, folderName) {
 	const engine = scene.getEngine();
 	
 	// 1. Filter GLB files for the selected folder
@@ -100,7 +100,7 @@ export async function loadAssets (scene, camera, folderName) {
 }
 
 // Rewritten to use the main scene and camera
-async function generateThumbnails (scene, camera, files) {
+async function generateThumbnails(scene, camera, files) {
 	const engine = scene.getEngine();
 	const results = [];
 	
@@ -139,16 +139,35 @@ async function generateThumbnails (scene, camera, files) {
 	return results;
 }
 
-function processSingleFile (scene, camera, engine, file) {
+function processSingleFile(scene, camera, engine, file) {
 	// Return a Promise so we can await the screenshot callback
 	return new Promise(async (resolve, reject) => {
 		let root = null;
+		let light = null; // Variable for temporary light
+		
 		try {
+			// Create a temporary HemisphericLight to ensure the asset is visible
+			// This fixes the issue where assets appear black during thumbnail generation
+			light = new BABYLON.HemisphericLight('thumbnail_light', new BABYLON.Vector3(0, 1, 0), scene);
+			light.intensity = 1.0;
+			light.groundColor = new BABYLON.Color3(0.2, 0.2, 0.2); // Slight ambient from bottom
+			light.specular = new BABYLON.Color3(0, 0, 0); // Reduce specular to avoid glare
+			
 			// Import into the main scene
 			// OBJECTS_ROOT is "./assets/objects/"
-			// file is "folder/filename.glb"
-			// ImportMeshAsync handles this concatenation correctly
-			const result = await BABYLON.SceneLoader.ImportMeshAsync('', OBJECTS_ROOT, file, scene);
+			// file is "folder/filename.glb" e.g. "nature/rock.glb"
+			
+			// Fix: Split path to ensure relative textures load correctly
+			const lastSlashIndex = file.lastIndexOf('/');
+			let rootUrl = OBJECTS_ROOT;
+			let filename = file;
+			
+			if (lastSlashIndex !== -1) {
+				rootUrl = OBJECTS_ROOT + file.substring(0, lastSlashIndex + 1);
+				filename = file.substring(lastSlashIndex + 1);
+			}
+			
+			const result = await BABYLON.SceneLoader.ImportMeshAsync('', rootUrl, filename, scene);
 			root = result.meshes[0];
 			
 			// Stop any animations that might have auto-played
@@ -204,12 +223,16 @@ function processSingleFile (scene, camera, engine, file) {
 				// Clean up the mesh immediately
 				root.dispose(false, true);
 			}
+			if (light) {
+				// Clean up the temporary light
+				light.dispose();
+			}
 		}
 	});
 }
 
 // --- AJAX UPLOAD FUNCTION ---
-async function uploadThumbnail (dataUrl, filename) {
+async function uploadThumbnail(dataUrl, filename) {
 	try {
 		const response = await fetch('/save-thumbnail', {
 			method: 'POST',
