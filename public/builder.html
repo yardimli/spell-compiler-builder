@@ -65,6 +65,8 @@
 			
 			<button id="btnResetCam" class="secondary">Reset Camera</button>
 			<button id="btnClearScene" class="danger">Clear Scene</button>
+			<!-- NEW: Full Clear Button -->
+			<button id="btnFullClear" class="danger" title="Clear Scene & Asset Store">Reset All</button>
 		</div>
 		
 		<div class="menu-group" style="border-right: none; margin-left: auto;">
@@ -404,6 +406,8 @@
 	<div id="context-menu">
 		<!-- Store Items -->
 		<div class="ctx-item store-only" id="ctx-add-grid-store">Add Grid of Objects...</div>
+		<!-- NEW: Delete from store -->
+		<div class="ctx-item store-only" id="ctx-delete-store-asset" style="border-top: 1px solid #34495e; color: #e74c3c;">Delete from Store</div>
 		
 		<!-- Browser Items -->
 		<div class="ctx-item browser-only" id="ctx-add-to-store">Add to Asset Store...</div>

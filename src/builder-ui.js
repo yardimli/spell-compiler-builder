@@ -4,7 +4,7 @@ import { TreeView } from './tree-view';
 import { loadAssets, getAvailableFolders } from './loader';
 
 export class BuilderUI {
-	constructor (builderScene) {
+	constructor(builderScene) {
 		this.scene = builderScene;
 		this.manager = builderScene.objectManager;
 		this.currentMapName = 'new_map';
@@ -48,7 +48,7 @@ export class BuilderUI {
 		}
 	}
 	
-	setup (assets) {
+	setup(assets) {
 		this.loadSettings();
 		this.applySettings();
 		
@@ -71,7 +71,7 @@ export class BuilderUI {
 		this.renderAssetStore();
 	}
 	
-	setupStatusCoordinates () {
+	setupStatusCoordinates() {
 		const coordsEl = document.getElementById('status-coords');
 		if (!coordsEl) return;
 		
@@ -95,7 +95,7 @@ export class BuilderUI {
 		});
 	}
 	
-	setupFileBrowser () {
+	setupFileBrowser() {
 		// Modal Elements
 		const modal = document.getElementById('fileBrowserModal');
 		const btnOpen = document.getElementById('btnOpenFileBrowser');
@@ -200,7 +200,7 @@ export class BuilderUI {
 	}
 	
 	// Renders the File Browser (Inside Modal)
-	renderFileBrowser (assets, folderName) {
+	renderFileBrowser(assets, folderName) {
 		const listContainer = document.getElementById('asset-browser-content');
 		const existingItems = listContainer.querySelectorAll('.category-header, .category-grid');
 		existingItems.forEach(el => el.remove());
@@ -232,20 +232,9 @@ export class BuilderUI {
 			const grid = document.createElement('div');
 			grid.className = 'category-grid';
 			
-			// Default to expanded in modal view for better visibility
-			// const stateKey = `${folderName}:${groupName}`;
-			// const isCollapsed = sidebarState[stateKey] !== undefined ? sidebarState[stateKey] : false;
-			
-			// if (isCollapsed) {
-			// 	header.classList.add('collapsed');
-			// 	grid.classList.add('hidden');
-			// }
-			
 			header.addEventListener('click', () => {
 				const collapsed = header.classList.toggle('collapsed');
 				grid.classList.toggle('hidden');
-				// sidebarState[stateKey] = collapsed;
-				// localStorage.setItem(this.LS_SIDEBAR_KEY, JSON.stringify(sidebarState));
 			});
 			
 			groups[groupName].forEach(asset => {
@@ -286,7 +275,7 @@ export class BuilderUI {
 	}
 	
 	// Renders the Asset Store (Top Panel)
-	renderAssetStore () {
+	renderAssetStore() {
 		const container = document.getElementById('asset-store-list');
 		container.innerHTML = '';
 		
@@ -333,7 +322,7 @@ export class BuilderUI {
 		}
 	}
 	
-	updateAssetStoreSelection (selectedName) {
+	updateAssetStoreSelection(selectedName) {
 		const items = document.querySelectorAll('.store-item');
 		items.forEach(item => {
 			if (item.dataset.name === selectedName) {
@@ -345,7 +334,7 @@ export class BuilderUI {
 	}
 	
 	// Modal to add asset to store
-	openAddAssetModal (file, thumb, defaultName) {
+	openAddAssetModal(file, thumb, defaultName) {
 		const modal = document.getElementById('addAssetModal');
 		const input = document.getElementById('inputAssetName');
 		const btnConfirm = document.getElementById('btnConfirmAddAsset');
@@ -380,7 +369,7 @@ export class BuilderUI {
 		};
 	}
 	
-	setupAutoSaveTimer () {
+	setupAutoSaveTimer() {
 		const btnSaveNow = document.getElementById('btnSaveNow');
 		const performSave = () => {
 			if (this.globalSettings.autoSave) {
@@ -406,7 +395,7 @@ export class BuilderUI {
 		}
 	}
 	
-	updateAutoSaveUI () {
+	updateAutoSaveUI() {
 		const saveText = document.getElementById('auto-save-text');
 		if (!saveText) return;
 		if (!this.globalSettings.autoSave) {
@@ -443,7 +432,7 @@ export class BuilderUI {
 		statsEl.innerText = `Meshes: ${meshCount} | Poly: ${Math.floor(polyCount)}`;
 	}
 	
-	loadSettings () {
+	loadSettings() {
 		const saved = localStorage.getItem(this.LS_SETTINGS_KEY);
 		if (saved) {
 			try {
@@ -453,11 +442,11 @@ export class BuilderUI {
 		}
 	}
 	
-	saveSettings () {
+	saveSettings() {
 		localStorage.setItem(this.LS_SETTINGS_KEY, JSON.stringify(this.globalSettings));
 	}
 	
-	applySettings () {
+	applySettings() {
 		this.manager.defaultYOffset = parseFloat(this.globalSettings.yOffset);
 		this.manager.gridSize = parseFloat(this.globalSettings.gridSize);
 		this.manager.autoSaveEnabled = this.globalSettings.autoSave;
@@ -479,7 +468,7 @@ export class BuilderUI {
 		this.updateAutoSaveUI();
 	}
 	
-	setupLeftSidebarToggle () {
+	setupLeftSidebarToggle() {
 		const sidebar = document.getElementById('left-sidebar');
 		const header = document.getElementById('left-sidebar-header');
 		if (header && sidebar) {
@@ -487,7 +476,7 @@ export class BuilderUI {
 		}
 	}
 	
-	setupSplitter () {
+	setupSplitter() {
 		const splitter = document.getElementById('sidebar-splitter');
 		const propPanel = document.getElementById('properties-panel');
 		const rightSidebar = document.getElementById('right-sidebar');
@@ -523,7 +512,7 @@ export class BuilderUI {
 		});
 	}
 	
-	setupControls () {
+	setupControls() {
 		document.getElementById('btnResetCam').onclick = () => { this.scene.resetCamera(); };
 		document.getElementById('btnLoad').onclick = () => document.getElementById('fileInput').click();
 		document.getElementById('fileInput').onchange = (e) => {
@@ -552,6 +541,14 @@ export class BuilderUI {
 			}
 		};
 		
+		// NEW: Full Clear Button
+		document.getElementById('btnFullClear').onclick = () => {
+			if (confirm('WARNING: This will clear the entire scene AND remove all loaded assets from the store.\nAre you sure?')) {
+				this.manager.clearAll();
+				this.currentMapName = 'new_map';
+			}
+		};
+		
 		window.addEventListener('keydown', (e) => {
 			if (e.key === 'Escape') {
 				this.clearAllSelections();
@@ -576,12 +573,12 @@ export class BuilderUI {
 		}
 	}
 	
-	clearAllSelections () {
+	clearAllSelections() {
 		this.manager.setActiveAsset(null);
 		this.manager.selectObject(null, false);
 	}
 	
-	setupSaveModal () {
+	setupSaveModal() {
 		const modal = document.getElementById('saveMapModal');
 		const btnSave = document.getElementById('btnSave');
 		const btnSaveAs = document.getElementById('btnSaveAs');
@@ -609,7 +606,7 @@ export class BuilderUI {
 		window.onclick = (event) => { if (event.target === modal) closeModal(); };
 	}
 	
-	setupSettingsModal () {
+	setupSettingsModal() {
 		const modal = document.getElementById('settingsModal');
 		const btnOpen = document.getElementById('btnSettings');
 		const btnCancel = document.getElementById('btnCancelSettings');
@@ -661,9 +658,10 @@ export class BuilderUI {
 		window.onclick = (event) => { if (event.target === modal) close(); };
 	}
 	
-	setupContextMenu () {
+	setupContextMenu() {
 		const menu = document.getElementById('context-menu');
 		const gridItemStore = document.getElementById('ctx-add-grid-store');
+		const deleteStoreItem = document.getElementById('ctx-delete-store-asset');
 		const addToStoreItem = document.getElementById('ctx-add-to-store');
 		
 		const setAnchorItem = document.getElementById('ctx-set-anchor');
@@ -767,6 +765,16 @@ export class BuilderUI {
 			}
 		};
 		
+		// NEW: Delete from Store Action
+		deleteStoreItem.onclick = () => {
+			if (targetAssetName) {
+				if (confirm(`Remove '${targetAssetName}' from store? This will delete all instances of it in the scene.`)) {
+					this.manager.removeAssetFromStore(targetAssetName);
+				}
+				menu.style.display = 'none';
+			}
+		};
+		
 		addToStoreItem.onclick = () => {
 			if (targetBrowserFile) {
 				menu.style.display = 'none';
@@ -808,7 +816,7 @@ export class BuilderUI {
 		gridModal.onclick = (event) => { if (event.target === gridModal) closeGridModal(); };
 	}
 	
-	setupHistoryUI () {
+	setupHistoryUI() {
 		const btnUndo = document.getElementById('btnUndo');
 		const btnRedo = document.getElementById('btnRedo');
 		btnUndo.onclick = () => this.manager.undoRedo.undo();
@@ -826,7 +834,7 @@ export class BuilderUI {
 		});
 	}
 	
-	downloadJSON (data, filename) {
+	downloadJSON(data, filename) {
 		const json = JSON.stringify(data, null, 2);
 		const blob = new Blob([json], { type: 'application/json' });
 		const url = URL.createObjectURL(blob);

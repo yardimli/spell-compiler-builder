@@ -25,11 +25,6 @@ export class AssetManager {
 		
 		try {
 			// Fix: Split file path to ensure textures in subfolders resolve correctly
-			// file is e.g. "nature/rock.glb"
-			// rootUrl becomes "./assets/objects/nature/"
-			// filename becomes "rock.glb"
-			// This ensures relative texture paths in the GLB (e.g. "textures/diffuse.png")
-			// are resolved relative to the GLB's folder, not the ASSET_ROOT.
 			const lastSlashIndex = file.lastIndexOf('/');
 			let rootUrl = ASSET_ROOT;
 			let filename = file;
@@ -47,8 +42,6 @@ export class AssetManager {
 			root.name = `TEMPLATE_${name}`;
 			
 			// OPTIMIZATION: Use Instances
-			// For Instances to work, the master mesh must be Enabled.
-			// We hide it using isVisible = false.
 			root.setEnabled(true);
 			
 			// Ensure world matrix is computed for bounds
@@ -64,8 +57,6 @@ export class AssetManager {
 				m.checkCollisions = false;
 				m.receiveShadows = true; // Default settings for source
 				m.computeWorldMatrix(true);
-				
-				// Freeze world matrix of template to save CPU, as it never moves
 				m.freezeWorldMatrix();
 			});
 			
@@ -80,6 +71,21 @@ export class AssetManager {
 		} catch (e) {
 			console.error(`[AssetManager] Failed to load '${file}'`, e);
 			throw e;
+		}
+	}
+	
+	/**
+	 * Removes an asset from the store and disposes its template.
+	 * @param {string} name - Asset name
+	 */
+	removeAsset(name) {
+		const asset = this.store.get(name);
+		if (asset) {
+			if (asset.root) {
+				asset.root.dispose(false, true);
+			}
+			this.store.delete(name);
+			console.log(`[AssetManager] Removed '${name}' from store.`);
 		}
 	}
 	
@@ -115,13 +121,10 @@ export class AssetManager {
 		
 		if (newRoot) {
 			newRoot.name = name;
-			
-			// Reset transform
 			newRoot.position = BABYLON.Vector3.Zero();
 			newRoot.rotation = BABYLON.Vector3.Zero();
 			newRoot.scaling = BABYLON.Vector3.One();
 			
-			// Ensure metadata exists
 			if (!newRoot.metadata) newRoot.metadata = {};
 		}
 		
@@ -130,43 +133,30 @@ export class AssetManager {
 	
 	/**
 	 * Recursively instantiates nodes.
-	 * Meshes become InstancedMeshes (if they have geometry).
-	 * TransformNodes/Empty Meshes become Clones.
 	 */
 	_instantiateNode(node, parent = null) {
 		let newNode;
 		
-		// FIX: Only create instances for meshes WITH geometry.
-		// Empty meshes (like __root__) must be cloned, otherwise Babylon throws "Instances should only be created for meshes with geometry".
 		if (node instanceof BABYLON.Mesh && node.geometry) {
-			// Create Instance
 			newNode = node.createInstance(node.name + "_i");
 			newNode.isVisible = true;
 			newNode.checkCollisions = false;
 		} else {
-			// Clone TransformNode, Light, Camera, or Empty Mesh
-			// FIX: Pass 'true' (doNotCloneChildren) to prevent exponential duplication logic
-			// because we are manually recursing children below.
 			if (node instanceof BABYLON.Mesh || node instanceof BABYLON.TransformNode) {
 				newNode = node.clone(node.name + "_c", parent, true);
 			} else {
-				// Fallback for types that might not support doNotCloneChildren arg (though most Nodes do)
 				newNode = node.clone(node.name + "_c", parent);
 			}
 			
-			// Ensure the clone is visible/enabled (since template might be hidden)
 			if (newNode) {
 				if (newNode.setEnabled) newNode.setEnabled(true);
 				if (newNode.isVisible !== undefined) newNode.isVisible = true;
-				// Unfreeze world matrix if template was frozen, so the clone can move
 				if (newNode.unfreezeWorldMatrix) newNode.unfreezeWorldMatrix();
 			}
 		}
 		
 		if (newNode) {
 			newNode.parent = parent;
-			
-			// Recurse children manually
 			node.getChildren().forEach(child => {
 				this._instantiateNode(child, newNode);
 			});
