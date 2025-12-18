@@ -365,6 +365,12 @@ export class TreeView {
 			this.lastClickedIndex = index;
 		};
 		
+		// Double Click to Focus
+		item.ondblclick = (e) => {
+			e.stopPropagation();
+			this.manager.focusOnObject(obj.id);
+		};
+		
 		parentContainer.appendChild(item);
 	}
 	

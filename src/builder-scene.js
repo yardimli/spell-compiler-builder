@@ -242,6 +242,44 @@ export class BuilderScene {
 		BABYLON.Animation.CreateAndStartAnimation('camBeta', this.camera, 'beta', frameRate, durationFrames, this.camera.beta, targetBeta, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
 	}
 	
+	/**
+	 * Zooms the camera to focus on a specific mesh
+	 * @param {BABYLON.Mesh} mesh - The mesh to focus on
+	 */
+	zoomToMesh (mesh) {
+		if (!mesh) return;
+		
+		// Animate Camera Focus
+		const targetPos = mesh.position.clone();
+		const targetRadius = 10;
+		const frameRate = 60;
+		const durationFrames = 30;
+		
+		this.scene.stopAnimation(this.camera);
+		
+		BABYLON.Animation.CreateAndStartAnimation(
+			'camTarget',
+			this.camera,
+			'target',
+			frameRate,
+			durationFrames,
+			this.camera.target.clone(),
+			targetPos,
+			BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+		);
+		
+		BABYLON.Animation.CreateAndStartAnimation(
+			'camRadius',
+			this.camera,
+			'radius',
+			frameRate,
+			durationFrames,
+			this.camera.radius,
+			targetRadius,
+			BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+		);
+	}
+	
 	createGrid (gridSize) {
 		const width = 100;
 		const height = 100;
@@ -539,34 +577,9 @@ export class BuilderScene {
 			}
 			
 			// Animate Camera Focus
-			const targetPos = mesh.position.clone();
-			const targetRadius = 10;
-			const frameRate = 60;
-			const durationFrames = 30;
-			
-			this.scene.stopAnimation(this.camera);
-			
-			BABYLON.Animation.CreateAndStartAnimation(
-				'camTarget',
-				this.camera,
-				'target',
-				frameRate,
-				durationFrames,
-				this.camera.target.clone(),
-				targetPos,
-				BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
-			);
-			
-			BABYLON.Animation.CreateAndStartAnimation(
-				'camRadius',
-				this.camera,
-				'radius',
-				frameRate,
-				durationFrames,
-				this.camera.radius,
-				targetRadius,
-				BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
-			);
+			if (mesh) {
+				this.zoomToMesh(mesh);
+			}
 		}
 	}
 }

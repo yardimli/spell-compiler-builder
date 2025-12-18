@@ -104,6 +104,17 @@ export class ObjectManager {
 	setAnchor(mesh) { this.snapManager.setAnchor(mesh); }
 	releaseAnchor() { this.snapManager.clearAnchor(); }
 	
+	/**
+	 * Focuses the camera on an object by ID
+	 * @param {string} id - The object ID
+	 */
+	focusOnObject(id) {
+		const mesh = this.findMeshById(id);
+		if (mesh) {
+			this.builderScene.zoomToMesh(mesh);
+		}
+	}
+	
 	// --- Asset Store Logic ---
 	
 	async addAssetToStore(name, file, thumbnail) {
